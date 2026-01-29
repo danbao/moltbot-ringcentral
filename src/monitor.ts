@@ -329,12 +329,15 @@ async function processMessageWithPipeline(params: {
     // Check if message contains "助理" keyword pattern for assistant requests
     const hasAssistantKeyword = /助理/.test(rawBody);
     
+    // Check if owner is calling by name "Aneya" (since owner can't mention themselves)
+    const isOwnerCallingByName = ownerId && senderId === ownerId && /Aneya/i.test(rawBody);
+    
     // Only respond to group messages if:
-    // 1. Bot was mentioned AND
-    // 2. Message contains "助理" keyword (requesting assistant help)
+    // 1. (Bot was mentioned AND message contains "助理" keyword) OR
+    // 2. Owner is calling by name "Aneya"
     // Otherwise, just track/observe without responding
-    if (!mentionInfo.wasMentioned || !hasAssistantKeyword) {
-      logVerbose(core, runtime, `track group message without responding (mentioned=${mentionInfo.wasMentioned}, hasAssistantKeyword=${hasAssistantKeyword}, chat=${chatId})`);
+    if (!isOwnerCallingByName && (!mentionInfo.wasMentioned || !hasAssistantKeyword)) {
+      logVerbose(core, runtime, `track group message without responding (mentioned=${mentionInfo.wasMentioned}, hasAssistantKeyword=${hasAssistantKeyword}, isOwnerCallingByName=${isOwnerCallingByName}, chat=${chatId})`);
       // TODO: Track message for later summarization to owner
       return;
     }
