@@ -1,5 +1,5 @@
 {
-  "id": "ringcentral",
+  "id": "moltbot-ringcentral",
   "name": "RingCentral",
   "description": "RingCentral Team Messaging channel plugin for Moltbot",
   "channels": ["ringcentral"],

@@ -58,7 +58,8 @@
     "@ringcentral/sdk": "^5.0.0",
     "@ringcentral/subscriptions": "^5.0.0",
     "isomorphic-ws": "^5.0.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "clawdbot": "^2026.1.24",

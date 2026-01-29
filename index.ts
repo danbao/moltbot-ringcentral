@@ -5,7 +5,7 @@ import { ringcentralDock, ringcentralPlugin } from "./src/channel.js";
 import { setRingCentralRuntime } from "./src/runtime.js";
 
 const plugin = {
-  id: "ringcentral",
+  id: "moltbot-ringcentral",
   name: "RingCentral",
   description: "Moltbot RingCentral Team Messaging channel plugin",
   configSchema: emptyPluginConfigSchema(),
