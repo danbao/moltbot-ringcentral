@@ -1,7 +1,8 @@
 {
   "name": "moltbot-ringcentral",
-  "version": "2026.1.29-beta1",
+  "version": "2026.1.29-beta3",
   "type": "module",
+  "main": "index.ts",
   "description": "Moltbot RingCentral Team Messaging channel plugin",
   "license": "MIT",
   "scripts": {
@@ -62,7 +63,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "clawdbot": "^2026.1.24",
+    "clawdbot": "2026.1.24-3",
     "typescript": "^5.7.3",
     "vitest": "^3.0.4"
   },
