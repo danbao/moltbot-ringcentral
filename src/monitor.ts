@@ -326,21 +326,8 @@ async function processMessageWithPipeline(params: {
     });
     effectiveWasMentioned = mentionGate.effectiveWasMentioned;
     
-    // Check if message contains "助理" keyword pattern for assistant requests
-    const hasAssistantKeyword = /助理/.test(rawBody);
-    
-    // Check if owner is calling by name "Aneya" (since owner can't mention themselves)
-    const isOwnerCallingByName = ownerId && senderId === ownerId && /Aneya/i.test(rawBody);
-    
-    // Only respond to group messages if:
-    // 1. (Bot was mentioned AND message contains "助理" keyword) OR
-    // 2. Owner is calling by name "Aneya"
-    // Otherwise, just track/observe without responding
-    if (!isOwnerCallingByName && (!mentionInfo.wasMentioned || !hasAssistantKeyword)) {
-      logVerbose(core, runtime, `track group message without responding (mentioned=${mentionInfo.wasMentioned}, hasAssistantKeyword=${hasAssistantKeyword}, isOwnerCallingByName=${isOwnerCallingByName}, chat=${chatId})`);
-      // TODO: Track message for later summarization to owner
-      return;
-    }
+    // Response decision is now delegated to the AI based on SOUL/identity
+    // Plugin only handles mention gating; AI decides whether to respond or NO_REPLY
     
     if (mentionGate.shouldSkip) {
       logVerbose(core, runtime, `drop group message (mention required, chat=${chatId})`);
