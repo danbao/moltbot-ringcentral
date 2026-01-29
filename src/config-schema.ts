@@ -49,7 +49,6 @@ const RingCentralAccountSchemaBase = z
     botExtensionId: z.string().optional(),
     selfOnly: z.boolean().optional(),
     useAdaptiveCards: z.boolean().optional(), // Use Adaptive Cards for code blocks (default: false)
-    replyInThread: z.boolean().optional(), // Reply in thread under user's message (default: false)
   })
   .strict();
 

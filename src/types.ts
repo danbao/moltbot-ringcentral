@@ -169,7 +169,6 @@ export type RingCentralAccountConfig = {
   replyToMode?: "off" | "all";
   selfOnly?: boolean; // JWT mode: only accept messages from the JWT user in Personal chat (default: true)
   useAdaptiveCards?: boolean; // Use Adaptive Cards for messages with code blocks (default: false)
-  replyInThread?: boolean; // Reply in thread under user's message (default: false)
 };
 
 export type RingCentralConfig = RingCentralAccountConfig & {

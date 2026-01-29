@@ -511,10 +511,6 @@ async function processMessageWithPipeline(params: {
     runtime.error?.(`Failed sending typing message: ${String(err)}`);
   }
 
-  // Determine if we should reply in thread
-  const replyInThread = account.config.replyInThread === true;
-  const replyToPostId = replyInThread && messageId ? messageId : undefined;
-
   await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
     ctx: ctxPayload,
     cfg: config,
@@ -529,7 +525,6 @@ async function processMessageWithPipeline(params: {
           config,
           statusSink,
           typingPostId,
-          replyToPostId,
         });
         typingPostId = undefined;
       },
@@ -571,9 +566,8 @@ async function deliverRingCentralReply(params: {
   config: MoltbotConfig;
   statusSink?: (patch: { lastInboundAt?: number; lastOutboundAt?: number }) => void;
   typingPostId?: string;
-  replyToPostId?: string;
 }): Promise<void> {
-  const { payload, account, chatId, runtime, core, config, statusSink, typingPostId, replyToPostId } = params;
+  const { payload, account, chatId, runtime, core, config, statusSink, typingPostId } = params;
   const mediaList = payload.mediaUrls?.length
     ? payload.mediaUrls
     : payload.mediaUrl
@@ -632,7 +626,6 @@ async function deliverRingCentralReply(params: {
           chatId,
           text: caption,
           attachments: [{ id: upload.attachmentId }],
-          replyToPostId,
         });
         if (sendResult?.postId) trackSentMessageId(sendResult.postId);
         statusSink?.({ lastOutboundAt: Date.now() });
@@ -655,10 +648,12 @@ async function deliverRingCentralReply(params: {
       chunkLimit,
       chunkMode,
     );
+
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
       try {
         if (i === 0 && typingPostId) {
+          // Update thinking message with first chunk
           const updateResult = await updateRingCentralMessage({
             account,
             chatId,
@@ -667,11 +662,11 @@ async function deliverRingCentralReply(params: {
           });
           if (updateResult?.postId) trackSentMessageId(updateResult.postId);
         } else {
+          // Send new message for subsequent chunks
           const sendResult = await sendRingCentralMessage({
             account,
             chatId,
             text: chunk,
-            replyToPostId,
           });
           if (sendResult?.postId) trackSentMessageId(sendResult.postId);
         }
