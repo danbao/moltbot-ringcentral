@@ -95,10 +95,12 @@ describe("resolveRingCentralAccount", () => {
       channels: {
         ringcentral: {
           enabled: true,
-          clientId: "test-client-id",
-          clientSecret: "test-client-secret",
-          jwt: "test-jwt",
-          server: "https://platform.devtest.ringcentral.com",
+          credentials: {
+            clientId: "test-client-id",
+            clientSecret: "test-client-secret",
+            jwt: "test-jwt",
+            server: "https://platform.devtest.ringcentral.com",
+          },
         },
       },
     } as MoltbotConfig;
@@ -157,9 +159,11 @@ describe("resolveRingCentralAccount", () => {
       channels: {
         ringcentral: {
           enabled: true,
-          clientId: "test-client-id",
-          clientSecret: "test-client-secret",
-          jwt: "test-jwt",
+          credentials: {
+            clientId: "test-client-id",
+            clientSecret: "test-client-secret",
+            jwt: "test-jwt",
+          },
         },
       },
     } as MoltbotConfig;
@@ -176,9 +180,11 @@ describe("resolveRingCentralAccount", () => {
           enabled: true,
           accounts: {
             work: {
-              clientId: "work-client-id",
-              clientSecret: "work-client-secret",
-              jwt: "work-jwt",
+              credentials: {
+                clientId: "work-client-id",
+                clientSecret: "work-client-secret",
+                jwt: "work-jwt",
+              },
               name: "Work Account",
             },
           },
@@ -198,12 +204,16 @@ describe("resolveRingCentralAccount", () => {
       channels: {
         ringcentral: {
           enabled: true,
-          server: "https://base.server.com",
+          credentials: {
+            server: "https://base.server.com",
+          },
           accounts: {
             work: {
-              clientId: "work-client-id",
-              clientSecret: "work-client-secret",
-              jwt: "work-jwt",
+              credentials: {
+                clientId: "work-client-id",
+                clientSecret: "work-client-secret",
+                jwt: "work-jwt",
+              },
             },
           },
         },
@@ -220,13 +230,17 @@ describe("resolveRingCentralAccount", () => {
       channels: {
         ringcentral: {
           enabled: true,
-          server: "https://base.server.com",
+          credentials: {
+            server: "https://base.server.com",
+          },
           accounts: {
             work: {
-              clientId: "work-client-id",
-              clientSecret: "work-client-secret",
-              jwt: "work-jwt",
-              server: "https://work.server.com",
+              credentials: {
+                clientId: "work-client-id",
+                clientSecret: "work-client-secret",
+                jwt: "work-jwt",
+                server: "https://work.server.com",
+              },
             },
           },
         },
@@ -245,21 +259,27 @@ describe("listEnabledRingCentralAccounts", () => {
       channels: {
         ringcentral: {
           enabled: true,
-          clientId: "base-id",
-          clientSecret: "base-secret",
-          jwt: "base-jwt",
+          credentials: {
+            clientId: "base-id",
+            clientSecret: "base-secret",
+            jwt: "base-jwt",
+          },
           accounts: {
             enabled1: {
               enabled: true,
-              clientId: "e1-id",
-              clientSecret: "e1-secret",
-              jwt: "e1-jwt",
+              credentials: {
+                clientId: "e1-id",
+                clientSecret: "e1-secret",
+                jwt: "e1-jwt",
+              },
             },
             disabled1: {
               enabled: false,
-              clientId: "d1-id",
-              clientSecret: "d1-secret",
-              jwt: "d1-jwt",
+              credentials: {
+                clientId: "d1-id",
+                clientSecret: "d1-secret",
+                jwt: "d1-jwt",
+              },
             },
           },
         },

@@ -139,13 +139,17 @@ export type RingCentralGroupConfig = {
   systemPrompt?: string;
 };
 
-export type RingCentralAccountConfig = {
-  enabled?: boolean;
-  name?: string;
+export type RingCentralCredentials = {
   clientId?: string;
   clientSecret?: string;
   jwt?: string;
   server?: string;
+};
+
+export type RingCentralAccountConfig = {
+  enabled?: boolean;
+  name?: string;
+  credentials?: RingCentralCredentials;
   markdown?: MarkdownConfig;
   dmPolicy?: DmPolicy;
   allowFrom?: Array<string | number>;

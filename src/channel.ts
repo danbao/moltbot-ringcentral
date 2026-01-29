@@ -144,10 +144,7 @@ export const ringcentralPlugin: ChannelPlugin<ResolvedRingCentralAccount> = {
         sectionKey: "ringcentral",
         accountId,
         clearBaseFields: [
-          "clientId",
-          "clientSecret",
-          "jwt",
-          "server",
+          "credentials",
           "name",
         ],
       }),
@@ -317,18 +314,20 @@ export const ringcentralPlugin: ChannelPlugin<ResolvedRingCentralAccount> = {
               channelKey: "ringcentral",
             })
           : namedConfig;
-      const patch = input.useEnv
+      // Build nested credentials block
+      const credentialsPatch = input.useEnv
         ? {}
         : {
-            ...(input.clientId ? { clientId: input.clientId } : {}),
-            ...(input.clientSecret ? { clientSecret: input.clientSecret } : {}),
-            ...(input.jwt ? { jwt: input.jwt } : {}),
+            credentials: {
+              ...(input.clientId ? { clientId: input.clientId } : {}),
+              ...(input.clientSecret ? { clientSecret: input.clientSecret } : {}),
+              ...(input.jwt ? { jwt: input.jwt } : {}),
+              ...(input.server?.trim() ? { server: input.server.trim() } : {}),
+            },
           };
-      const server = input.server?.trim();
-      const configPatch = {
-        ...patch,
-        ...(server ? { server } : {}),
-      };
+      // Only include credentials if it has any values
+      const hasCredentials = input.clientId || input.clientSecret || input.jwt || input.server?.trim();
+      const configPatch = input.useEnv || !hasCredentials ? {} : credentialsPatch;
       if (accountId === DEFAULT_ACCOUNT_ID) {
         return {
           ...next,

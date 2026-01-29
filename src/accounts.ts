@@ -60,7 +60,11 @@ function mergeRingCentralAccountConfig(
   const raw = (cfg.channels?.ringcentral ?? {}) as RingCentralConfig;
   const { accounts: _ignored, defaultAccount: _ignored2, ...base } = raw;
   const account = resolveAccountConfig(cfg, accountId) ?? {};
-  return { ...base, ...account } as RingCentralAccountConfig;
+  return {
+    ...base,
+    ...account,
+    credentials: { ...base.credentials, ...account.credentials },
+  } as RingCentralAccountConfig;
 }
 
 function resolveCredentialsFromConfig(params: {
@@ -75,10 +79,11 @@ function resolveCredentialsFromConfig(params: {
 } {
   const { account, accountId } = params;
 
-  const configClientId = account.clientId?.trim();
-  const configClientSecret = account.clientSecret?.trim();
-  const configJwt = account.jwt?.trim();
-  const configServer = account.server?.trim() || DEFAULT_SERVER;
+  const creds = account.credentials;
+  const configClientId = creds?.clientId?.trim();
+  const configClientSecret = creds?.clientSecret?.trim();
+  const configJwt = creds?.jwt?.trim();
+  const configServer = creds?.server?.trim() || DEFAULT_SERVER;
 
   // 1. Check inline config first
   if (configClientId && configClientSecret && configJwt) {
