@@ -19,14 +19,20 @@ const RingCentralGroupConfigSchema = z
   })
   .strict();
 
-const RingCentralAccountSchemaBase = z
+const RingCentralCredentialsSchema = z
   .object({
-    name: z.string().optional(),
-    enabled: z.boolean().optional(),
     clientId: z.string().optional(),
     clientSecret: z.string().optional(),
     jwt: z.string().optional(),
     server: z.string().optional(),
+  })
+  .strict();
+
+const RingCentralAccountSchemaBase = z
+  .object({
+    name: z.string().optional(),
+    enabled: z.boolean().optional(),
+    credentials: RingCentralCredentialsSchema.optional(),
     markdown: MarkdownConfigSchema,
     dmPolicy: DmPolicySchema.optional().default("allowlist"),
     allowFrom: z.array(z.union([z.string(), z.number()])).optional(),
