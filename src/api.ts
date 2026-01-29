@@ -17,8 +17,9 @@ export async function sendRingCentralMessage(params: {
   chatId: string;
   text?: string;
   attachments?: Array<{ id: string; type?: string }>;
+  replyToPostId?: string;
 }): Promise<{ postId?: string } | null> {
-  const { account, chatId, text, attachments } = params;
+  const { account, chatId, text, attachments, replyToPostId } = params;
   const platform = await getRingCentralPlatform(account);
 
   const body: Record<string, unknown> = {};
@@ -26,6 +27,7 @@ export async function sendRingCentralMessage(params: {
   if (attachments && attachments.length > 0) {
     body.attachments = attachments;
   }
+  if (replyToPostId) body.replyToPostId = replyToPostId;
 
   const response = await platform.post(`${TM_API_BASE}/chats/${chatId}/posts`, body);
   const result = (await response.json()) as RingCentralPost;

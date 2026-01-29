@@ -30,6 +30,10 @@ export type RingCentralRuntimeEnv = {
 const recentlySentMessageIds = new Set<string>();
 const MESSAGE_ID_TTL = 60000; // 60 seconds
 
+// Track recently processed inbound message IDs to avoid duplicate processing
+const recentlyProcessedMessageIds = new Set<string>();
+const PROCESSED_MESSAGE_TTL = 10000; // 10 seconds (shorter TTL for inbound dedup)
+
 // Reconnection settings
 const RECONNECT_INITIAL_DELAY = 1000; // 1 second
 const RECONNECT_MAX_DELAY = 60000; // 60 seconds
@@ -186,19 +190,40 @@ async function processMessageWithPipeline(params: {
   const rawBody = messageText || (hasMedia ? "<media:attachment>" : "");
   if (!rawBody) return;
 
-  // Skip bot's own messages to avoid infinite loop
-  // Check 1: Skip if this is a message we recently sent
+  // Debug: Log message source info
   const messageId = eventBody.id ?? "";
-  if (messageId && isOwnSentMessage(messageId)) {
-    logVerbose(core, runtime, `skip own sent message: ${messageId}`);
+  const isTrackedMessage = messageId ? isOwnSentMessage(messageId) : false;
+  const isThinkingMessage = rawBody.includes("thinking...") || rawBody.includes("typing...");
+  const messageSource = isTrackedMessage ? "API(tracked)" : isThinkingMessage ? "API(thinking)" : "USER";
+  
+  runtime.log?.(`[${account.accountId}] 📨 Received message: id=${messageId}, source=${messageSource}, text="${rawBody.slice(0, 50)}${rawBody.length > 50 ? "..." : ""}"`);
+
+  // Skip bot's own messages to avoid infinite loop
+  // Check 1: Skip if this is a message we recently sent (within 60s)
+  if (messageId && isTrackedMessage) {
+    runtime.log?.(`[${account.accountId}] ⏭️ Skip: tracked sent message`);
     return;
   }
   
   // Check 2: Skip typing/thinking indicators (pattern-based)
-  if (rawBody.includes("thinking...") || rawBody.includes("typing...")) {
-    logVerbose(core, runtime, "skip typing indicator message");
+  if (isThinkingMessage) {
+    runtime.log?.(`[${account.accountId}] ⏭️ Skip: thinking indicator message`);
     return;
   }
+
+  // Check 3: Skip if we've already processed this message (dedup for duplicate WebSocket events)
+  if (messageId && recentlyProcessedMessageIds.has(messageId)) {
+    runtime.log?.(`[${account.accountId}] ⏭️ Skip: duplicate message (already processed)`);
+    return;
+  }
+  
+  // Mark this message as being processed
+  if (messageId) {
+    recentlyProcessedMessageIds.add(messageId);
+    setTimeout(() => recentlyProcessedMessageIds.delete(messageId), PROCESSED_MESSAGE_TTL);
+  }
+  
+  runtime.log?.(`[${account.accountId}] ✅ Processing user message`);
   
   // In JWT mode (selfOnly), only accept messages from the JWT user themselves
   // This is because the bot uses the JWT user's identity, so we're essentially
@@ -486,6 +511,10 @@ async function processMessageWithPipeline(params: {
     runtime.error?.(`Failed sending typing message: ${String(err)}`);
   }
 
+  // Determine if we should reply in thread
+  const replyInThread = account.config.replyInThread === true;
+  const replyToPostId = replyInThread && messageId ? messageId : undefined;
+
   await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
     ctx: ctxPayload,
     cfg: config,
@@ -500,6 +529,7 @@ async function processMessageWithPipeline(params: {
           config,
           statusSink,
           typingPostId,
+          replyToPostId,
         });
         typingPostId = undefined;
       },
@@ -541,8 +571,9 @@ async function deliverRingCentralReply(params: {
   config: MoltbotConfig;
   statusSink?: (patch: { lastInboundAt?: number; lastOutboundAt?: number }) => void;
   typingPostId?: string;
+  replyToPostId?: string;
 }): Promise<void> {
-  const { payload, account, chatId, runtime, core, config, statusSink, typingPostId } = params;
+  const { payload, account, chatId, runtime, core, config, statusSink, typingPostId, replyToPostId } = params;
   const mediaList = payload.mediaUrls?.length
     ? payload.mediaUrls
     : payload.mediaUrl
@@ -601,6 +632,7 @@ async function deliverRingCentralReply(params: {
           chatId,
           text: caption,
           attachments: [{ id: upload.attachmentId }],
+          replyToPostId,
         });
         if (sendResult?.postId) trackSentMessageId(sendResult.postId);
         statusSink?.({ lastOutboundAt: Date.now() });
@@ -639,6 +671,7 @@ async function deliverRingCentralReply(params: {
             account,
             chatId,
             text: chunk,
+            replyToPostId,
           });
           if (sendResult?.postId) trackSentMessageId(sendResult.postId);
         }
