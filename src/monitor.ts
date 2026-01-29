@@ -325,55 +325,28 @@ async function processMessageWithPipeline(params: {
       commandAuthorized: commandAuthorized === true,
     });
     effectiveWasMentioned = mentionGate.effectiveWasMentioned;
+    
+    // Response decision is now delegated to the AI based on SOUL/identity
+    // Plugin only handles mention gating; AI decides whether to respond or NO_REPLY
+    
     if (mentionGate.shouldSkip) {
       logVerbose(core, runtime, `drop group message (mention required, chat=${chatId})`);
       return;
     }
   }
 
-  // DM policy checks - skip entirely in selfOnly mode (owner is always allowed)
+  // DM policy check
+  // - selfOnly=true (default): only Personal chat (self) is allowed (checked above via isPersonalChat)
+  // - selfOnly=false: allow DMs based on dmPolicy/allowFrom
   if (!isGroup && !selfOnly) {
-    const dmEnabled = account.config.dm?.enabled !== false;
-    if (dmPolicy === "disabled" || !dmEnabled) {
-      logVerbose(core, runtime, `Blocked RingCentral DM from ${senderId} (dmPolicy=disabled)`);
+    // Non-selfOnly mode: check dmPolicy and allowFrom
+    if (dmPolicy === "disabled") {
+      logVerbose(core, runtime, `ignore DM (dmPolicy=disabled)`);
       return;
     }
-
-    if (dmPolicy !== "open") {
-      const allowed = senderAllowedForCommands;
-      if (!allowed) {
-        if (dmPolicy === "pairing") {
-          const { code, created } = await core.channel.pairing.upsertPairingRequest({
-            channel: "ringcentral",
-            id: senderId,
-            meta: {},
-          });
-          if (created) {
-            logVerbose(core, runtime, `ringcentral pairing request sender=${senderId}`);
-            try {
-              await sendRingCentralMessage({
-                account,
-                chatId,
-                text: core.channel.pairing.buildPairingReply({
-                  channel: "ringcentral",
-                  idLine: `Your RingCentral user id: ${senderId}`,
-                  code,
-                }),
-              });
-              statusSink?.({ lastOutboundAt: Date.now() });
-            } catch (err) {
-              logVerbose(core, runtime, `pairing reply failed for ${senderId}: ${String(err)}`);
-            }
-          }
-        } else {
-          logVerbose(
-            core,
-            runtime,
-            `Blocked unauthorized RingCentral sender ${senderId} (dmPolicy=${dmPolicy})`,
-          );
-        }
-        return;
-      }
+    if (dmPolicy === "allowlist" && !isSenderAllowed(senderId, effectiveAllowFrom)) {
+      logVerbose(core, runtime, `ignore DM from ${senderId} (not in allowFrom)`);
+      return;
     }
   }
 
@@ -465,26 +438,7 @@ async function processMessageWithPipeline(params: {
       runtime.error?.(`ringcentral: failed updating session meta: ${String(err)}`);
     });
 
-  let typingPostId: string | undefined;
-
-  // Send typing indicator message
-  try {
-    const botName = resolveBotDisplayName({
-      accountName: account.config.name,
-      agentId: route.agentId,
-      config,
-    });
-    const result = await sendRingCentralMessage({
-      account,
-      chatId,
-      text: `⏳ _${botName} is thinking..._`,
-    });
-    typingPostId = result?.postId;
-    // Track sent message to avoid processing it as incoming
-    if (typingPostId) trackSentMessageId(typingPostId);
-  } catch (err) {
-    runtime.error?.(`Failed sending typing message: ${String(err)}`);
-  }
+  // Typing indicator disabled - respond directly without "thinking" message
 
   await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
     ctx: ctxPayload,
@@ -499,9 +453,8 @@ async function processMessageWithPipeline(params: {
           core,
           config,
           statusSink,
-          typingPostId,
+          typingPostId: undefined,
         });
-        typingPostId = undefined;
       },
       onError: (err, info) => {
         runtime.error?.(
