@@ -18,13 +18,20 @@ RingCentral Team Messaging channel plugin for Moltbot. Enables bidirectional mes
 ## Installation
 
 ```bash
-moltbot plugin install moltbot-ringcentral
+curl -fsSL https://clawd.bot/install.sh | bash -s -- --beta
+moltbot plugins install moltbot-ringcentral@2026.1.29-beta4
+moltbot config set channels.ringcentral.enabled true
+moltbot config set channels.ringcentral.credentials.clientId "your-client-id"
+moltbot config set channels.ringcentral.credentials.clientSecret "your-client-secret"
+moltbot config set channels.ringcentral.credentials.jwt "your-jwt-token"
+moltbot config set channels.ringcentral.credentials.server "https://platform.ringcentral.com"
+moltbot gateway restart
 ```
 
 Or install from tarball:
 
 ```bash
-moltbot plugin install ./moltbot-ringcentral-2026.1.25.tgz
+moltbot plugins install ./moltbot-ringcentral-2026.1.29-beta4.tgz
 ```
 
 ## RingCentral App Setup
@@ -48,10 +55,12 @@ Add to `~/.moltbot/moltbot.json`:
   "channels": {
     "ringcentral": {
       "enabled": true,
-      "clientId": "your-client-id",
-      "clientSecret": "your-client-secret",
-      "jwt": "your-jwt-token",
-      "server": "https://platform.ringcentral.com"
+      "credentials": {
+        "clientId": "your-client-id",
+        "clientSecret": "your-client-secret",
+        "jwt": "your-jwt-token",
+        "server": "https://platform.ringcentral.com"
+      }
     }
   }
 }
@@ -70,10 +79,10 @@ export RINGCENTRAL_JWT="your-jwt-token"
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `enabled` | boolean | `false` | Enable the RingCentral channel |
-| `clientId` | string | - | RingCentral app client ID |
-| `clientSecret` | string | - | RingCentral app client secret |
-| `jwt` | string | - | JWT token for authentication |
-| `server` | string | `https://platform.ringcentral.com` | RingCentral API server URL |
+| `credentials.clientId` | string | - | RingCentral app client ID |
+| `credentials.clientSecret` | string | - | RingCentral app client secret |
+| `credentials.jwt` | string | - | JWT token for authentication |
+| `credentials.server` | string | `https://platform.ringcentral.com` | RingCentral API server URL |
 | `selfOnly` | boolean | `true` | Only respond to JWT user in Personal chat |
 | `name` | string | - | Bot display name |
 | `textChunkLimit` | number | `4000` | Maximum characters per message chunk |
@@ -84,7 +93,7 @@ export RINGCENTRAL_JWT="your-jwt-token"
 
 ## Usage
 
-1. Start the Moltbot gateway:
+1. Start the moltbot gateway:
 
 ```bash
 moltbot gateway run
@@ -133,14 +142,18 @@ To enable the bot in group chats:
       "defaultAccount": "work",
       "accounts": {
         "work": {
-          "clientId": "work-client-id",
-          "clientSecret": "work-client-secret",
-          "jwt": "work-jwt-token"
+          "credentials": {
+            "clientId": "work-client-id",
+            "clientSecret": "work-client-secret",
+            "jwt": "work-jwt-token"
+          }
         },
         "personal": {
-          "clientId": "personal-client-id",
-          "clientSecret": "personal-client-secret",
-          "jwt": "personal-jwt-token"
+          "credentials": {
+            "clientId": "personal-client-id",
+            "clientSecret": "personal-client-secret",
+            "jwt": "personal-jwt-token"
+          }
         }
       }
     }
@@ -154,7 +167,7 @@ To enable the bot in group chats:
 
 Your app type is wrong. Create a **REST API App** (not Bot Add-in) with JWT auth flow.
 
-### "In order to call this API endpoint, application needs to have [WebSocket] permission"
+### "In order to call this API endpoint, application needs to have [Read Accounts, WebSocket Subscriptions, Team Messaging, WebSocket, Read Messages] permission"
 
 Add **WebSocket Subscriptions** permission in your app settings. Permission changes may take a few minutes to propagate.
 
