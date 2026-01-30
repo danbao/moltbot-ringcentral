@@ -462,12 +462,7 @@ async function processMessageWithPipeline(params: {
     }
   }
 
-  // Session label should be the conversation name (if available)
-  // - group: chatName (fallback: chat:<id>)
-  // - dm: user:<senderId>
-  const fromLabel = isGroup
-    ? (chatName?.trim() ? chatName.trim() : `chat:${chatId}`)
-    : `user:${senderId}`;
+  // NOTE: label is set later via conversationLabel (after chatName lookup).
   const storePath = core.channel.session.resolveStorePath(config.session?.store, {
     agentId: route.agentId,
   });
@@ -478,7 +473,9 @@ async function processMessageWithPipeline(params: {
   });
   const body = core.channel.reply.formatAgentEnvelope({
     channel: "RingCentral",
-    from: fromLabel,
+    from: isGroup
+      ? (chatName?.trim() ? chatName.trim() : `chat:${chatId}`)
+      : `user:${senderId}`,
     timestamp: eventBody.creationTime ? Date.parse(eventBody.creationTime) : undefined,
     previousTimestamp,
     envelope: envelopeOptions,
@@ -486,6 +483,14 @@ async function processMessageWithPipeline(params: {
   });
 
   const groupSystemPrompt = groupConfigResolved.entry?.systemPrompt?.trim() || undefined;
+
+  // Build a better conversation label for sessions/dashboard.
+  // - Prefer chatName when available
+  // - Fallback to chat:<chatId>
+  // NOTE: We intentionally do NOT try to expand members -> display names here yet.
+  const conversationLabel = isGroup
+    ? (chatName?.trim() ? chatName.trim() : `chat:${chatId}`)
+    : `user:${senderId}`;
 
   const ctxPayload = core.channel.reply.finalizeInboundContext({
     Body: body,
@@ -496,7 +501,7 @@ async function processMessageWithPipeline(params: {
     SessionKey: route.sessionKey,
     AccountId: route.accountId,
     ChatType: isGroup ? "channel" : "direct",
-    ConversationLabel: fromLabel,
+    ConversationLabel: conversationLabel,
     SenderId: senderId,
     WasMentioned: isGroup ? effectiveWasMentioned : undefined,
     CommandAuthorized: commandAuthorized,
@@ -507,7 +512,7 @@ async function processMessageWithPipeline(params: {
     MediaPath: mediaPath,
     MediaType: mediaType,
     MediaUrl: mediaPath,
-    GroupSpace: isGroup ? chatName ?? undefined : undefined,
+    GroupSpace: isGroup ? (chatName?.trim() ? chatName.trim() : undefined) : undefined,
     GroupSystemPrompt: isGroup ? groupSystemPrompt : undefined,
     OriginatingChannel: "ringcentral",
     OriginatingTo: `ringcentral:${chatId}`,
@@ -534,7 +539,7 @@ async function processMessageWithPipeline(params: {
       // If we only have a fallback label, overwrite it with the real group name.
       // NOTE: recordSessionMetaFromInbound merges meta; this second call ensures the
       // dashboard/session list picks up the newer label even for pre-existing sessions.
-      if (fromLabel === fallbackLabel) {
+      if (conversationLabel === fallbackLabel) {
         void core.channel.session.recordSessionMetaFromInbound({
           storePath,
           sessionKey: ctxPayload.SessionKey ?? route.sessionKey,
