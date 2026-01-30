@@ -13,7 +13,7 @@ import {
   type ChannelDock,
   type ChannelPlugin,
   type MoltbotConfig,
-} from "clawdbot/plugin-sdk";
+} from "openclaw/plugin-sdk";
 
 import {
   listRingCentralAccountIds,

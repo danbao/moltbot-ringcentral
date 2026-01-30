@@ -3,8 +3,8 @@ import WebSocketExtension, { Events as RcWsEvents } from "@rc-ex/ws";
 import * as fs from "fs";
 import * as path from "path";
 
-import type { MoltbotConfig } from "clawdbot/plugin-sdk";
-import { resolveMentionGatingWithBypass } from "clawdbot/plugin-sdk";
+import type { MoltbotConfig } from "openclaw/plugin-sdk";
+import { resolveMentionGatingWithBypass } from "openclaw/plugin-sdk";
 
 import type { ResolvedRingCentralAccount } from "./accounts.js";
 import { getRingCentralSDK } from "./auth.js";
@@ -380,6 +380,18 @@ async function processMessageWithPipeline(params: {
   const isPersonalChat = chatType === "Personal" || chatType === "PersonalChat";
   const isGroup = chatType !== "Direct" && chatType !== "PersonalChat" && chatType !== "Personal";
 
+  // Session key should be per conversation id (RingCentral chatId)
+  // NOTE: keep peer.kind stable for group vs dm.
+  const route = core.channel.routing.resolveAgentRoute({
+    cfg: config,
+    channel: "ringcentral",
+    accountId: account.accountId,
+    peer: {
+      kind: isGroup ? "group" : "dm",
+      id: chatId, // conversation id
+    },
+  });
+
   // META-ONLY: Always try to update session label/display metadata for group chats,
   // even if the message will be dropped by allowlist/groupPolicy later.
   // This keeps sessions list/dashboard readable (label from chatName) without changing reply policy.
@@ -588,18 +600,6 @@ async function processMessageWithPipeline(params: {
     logVerbose(core, runtime, `ringcentral: drop control command from ${senderId}`);
     return;
   }
-
-  // Session key should be per conversation id (RingCentral chatId)
-  // NOTE: keep peer.kind stable for group vs dm.
-  const route = core.channel.routing.resolveAgentRoute({
-    cfg: config,
-    channel: "ringcentral",
-    accountId: account.accountId,
-    peer: {
-      kind: isGroup ? "group" : "dm",
-      id: chatId, // conversation id
-    },
-  });
 
   let mediaPath: string | undefined;
   let mediaType: string | undefined;
