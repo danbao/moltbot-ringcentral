@@ -523,6 +523,33 @@ async function processMessageWithPipeline(params: {
       runtime.error?.(`ringcentral: failed updating session meta: ${String(err)}`);
     });
 
+  // Backfill / repair session label for existing sessions.
+  // Some sessions may have been created earlier with fallback labels (e.g. `chat:<id>`)
+  // before we started passing ConversationLabel / GroupSpace.
+  try {
+    if (isGroup && chatName?.trim()) {
+      const repairedLabel = chatName.trim();
+      const fallbackLabel = `chat:${chatId}`;
+
+      // If we only have a fallback label, overwrite it with the real group name.
+      // NOTE: recordSessionMetaFromInbound merges meta; this second call ensures the
+      // dashboard/session list picks up the newer label even for pre-existing sessions.
+      if (fromLabel === fallbackLabel) {
+        void core.channel.session.recordSessionMetaFromInbound({
+          storePath,
+          sessionKey: ctxPayload.SessionKey ?? route.sessionKey,
+          ctx: {
+            ...ctxPayload,
+            ConversationLabel: repairedLabel,
+            GroupSpace: repairedLabel,
+          },
+        });
+      }
+    }
+  } catch (err) {
+    runtime.error?.(`ringcentral: failed repairing session label: ${String(err)}`);
+  }
+
   // Typing indicator disabled - respond directly without "thinking" message
 
   await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
