@@ -1,4 +1,5 @@
 import { Subscriptions } from "@ringcentral/subscriptions";
+import WebSocketExtension, { Events as RcWsEvents } from "@rc-ex/ws";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -36,6 +37,88 @@ const MESSAGE_ID_TTL = 60000; // 60 seconds
 const RECONNECT_INITIAL_DELAY = 1000; // 1 second
 const RECONNECT_MAX_DELAY = 60000; // 60 seconds
 const RECONNECT_MAX_ATTEMPTS = 10;
+
+// WebSocket singleton per account to avoid hammering /oauth/wstoken.
+// @ringcentral/subscriptions + @rc-ex/ws can swallow initial connect errors and
+// repeated new Subscriptions()/newWsExtension() will trigger new wstoken calls.
+type WsManager = {
+  key: string;
+  sdk: any;
+  subscriptions: Subscriptions;
+  rc: any;
+  wsExt: WebSocketExtension;
+  connectPromise?: Promise<void>;
+  lastConnectAt?: number;
+};
+
+const wsManagers = new Map<string, WsManager>();
+
+function buildWsManagerKey(account: ResolvedRingCentralAccount): string {
+  // Changes in credentials should force a new WS manager.
+  return `${account.clientId}:${account.server}:${account.jwt?.slice(0, 20)}`;
+}
+
+async function getOrCreateWsManager(
+  account: ResolvedRingCentralAccount,
+  runtime: RingCentralRuntimeEnv,
+): Promise<WsManager> {
+  const key = buildWsManagerKey(account);
+  const cached = wsManagers.get(account.accountId);
+  if (cached && cached.key === key) return cached;
+
+  // Replace cache entry on credential change.
+  const sdk = await getRingCentralSDK(account);
+  const subscriptions = new Subscriptions({ sdk });
+  await (subscriptions as any).init?.();
+
+  const wsExt = new WebSocketExtension({
+    debugMode: true,
+    autoRecover: { enabled: false },
+  });
+
+  const rc = (subscriptions as any).rc;
+  if (!rc || typeof rc.installExtension !== "function") {
+    throw new Error("Subscriptions.rc.installExtension is unavailable; cannot install WS extension");
+  }
+
+  runtime.log?.(`[${account.accountId}] Installing @rc-ex/ws extension (singleton)...`);
+  await rc.installExtension(wsExt);
+
+  const mgr: WsManager = { key, sdk, subscriptions, rc, wsExt };
+  wsManagers.set(account.accountId, mgr);
+  return mgr;
+}
+
+async function ensureWsConnected(
+  mgr: WsManager,
+  account: ResolvedRingCentralAccount,
+  runtime: RingCentralRuntimeEnv,
+): Promise<void> {
+  // If already connected/open, nothing to do.
+  const ws = mgr.wsExt.ws;
+  if (ws && (ws.readyState === 0 || ws.readyState === 1)) {
+    return;
+  }
+  if (mgr.connectPromise) {
+    return mgr.connectPromise;
+  }
+
+  mgr.connectPromise = (async () => {
+    runtime.log?.(`[${account.accountId}] Forcing WS connect() (singleton)...`);
+    await mgr.wsExt.connect(false);
+    mgr.lastConnectAt = Date.now();
+    if (!mgr.wsExt.ws) {
+      throw new Error("WS connect() returned but wsExt.ws is still undefined");
+    }
+  })();
+
+  try {
+    await mgr.connectPromise;
+  } finally {
+    mgr.connectPromise = undefined;
+  }
+}
+
 
 function trackSentMessageId(messageId: string): void {
   recentlySentMessageIds.add(messageId);
@@ -828,6 +911,9 @@ export async function startRingCentralMonitor(
   let isShuttingDown = false;
   let ownerId: string | undefined;
 
+  // Avoid hammering /oauth/wstoken (auth rate limit is very low, e.g. 5/min).
+  let nextAllowedWsConnectAt = 0;
+
   // Calculate delay with exponential backoff
   const getReconnectDelay = () => {
     const delay = Math.min(
@@ -843,13 +929,42 @@ export async function startRingCentralMonitor(
 
     runtime.log?.(`[${account.accountId}] Starting RingCentral WebSocket subscription...`);
 
+    if (Date.now() < nextAllowedWsConnectAt) {
+      const waitMs = nextAllowedWsConnectAt - Date.now();
+      runtime.log?.(
+        `[${account.accountId}] WS connect is rate-limited locally; will retry in ${Math.ceil(waitMs / 1000)}s`,
+      );
+      scheduleReconnect();
+      return;
+    }
+
     try {
-      // Get SDK instance
-      const sdk = await getRingCentralSDK(account);
-      
-      // Create subscriptions manager
-      const subscriptions = new Subscriptions({ sdk });
-      const subscription = subscriptions.createSubscription();
+      // Get or create WS manager (singleton per account)
+      const mgr = await getOrCreateWsManager(account, runtime);
+
+      // Force connect once per account (with in-flight de-dupe)
+      await ensureWsConnected(mgr, account, runtime);
+
+      const subscription = mgr.subscriptions.createSubscription();
+
+      // IMPORTANT: @ringcentral/subscriptions will create *its own* WS extension instance internally
+      // when calling subscription.register(), which can still lead to `wse.ws` undefined and
+      // addEventListener crash. We bypass it by using our singleton wsExt directly.
+      // We'll keep `subscription` object for event emitter convenience, but registration uses wsExt.
+
+
+      // Extra diagnostics: log versions so we can pin a working combo.
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const sdkVer = (await import("@ringcentral/sdk/package.json", { with: { type: "json" } } as any))?.default?.version;
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const subsVer = (await import("@ringcentral/subscriptions/package.json", { with: { type: "json" } } as any))?.default?.version;
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const rcwsVer = (await import("@rc-ex/ws/package.json", { with: { type: "json" } } as any))?.default?.version;
+        runtime.log?.(`[${account.accountId}] rc sdk versions: @ringcentral/sdk=${sdkVer} @ringcentral/subscriptions=${subsVer} @rc-ex/ws=${rcwsVer}`);
+      } catch {
+        // ignore
+      }
 
       // Track current user ID to filter out self messages
       if (!ownerId) {
@@ -887,18 +1002,55 @@ export async function startRingCentralMonitor(
       // So our push subscription should also follow Team Messaging event filters.
       // The older /glip/* filters can yield 404s depending on account/permissions and
       // can break inbound processing.
-      wsSubscription = await subscription
-        .setEventFilters([
-          "/restapi/v1.0/team-messaging/v1/posts",
-          "/restapi/v1.0/team-messaging/v1/chats",
-        ])
-        .register();
+      const eventFilters = [
+        "/restapi/v1.0/glip/posts",
+        "/restapi/v1.0/glip/groups",
+      ];
+
+      // Register subscription via singleton wsExt (NOT via @ringcentral/subscriptions.register()).
+      // This avoids newWsExtension() being created per call.
+      wsSubscription = await mgr.wsExt.subscribe(eventFilters, (event: unknown) => {
+        subscription.emit(subscription.events.notification, event);
+      });
       
       runtime.log?.(`[${account.accountId}] RingCentral WebSocket subscription established`);
       reconnectAttempts = 0; // Reset on success
 
     } catch (err) {
-      runtime.error?.(`[${account.accountId}] Failed to create WebSocket subscription: ${String(err)}`);
+      const e = err as any;
+      const msg = e?.stack ? String(e.stack) : String(err);
+
+      // If we hit auth rate limit for /oauth/wstoken, back off according to retry-after.
+      const retryAfterHeader =
+        typeof e?.response?.headers?.get === "function" ? e.response.headers.get("retry-after") :
+        typeof e?.response?.headers?.["retry-after"] === "string" ? e.response.headers["retry-after"] :
+        undefined;
+      const retryAfterMs =
+        typeof e?.retryAfter === "number" ? e.retryAfter :
+        (retryAfterHeader ? (parseInt(retryAfterHeader, 10) * 1000) : undefined);
+
+      if (e?.message === "Request rate exceeded" || e?.response?.status === 429) {
+        const backoffMs = Number.isFinite(retryAfterMs) && retryAfterMs! > 0 ? retryAfterMs! : 60000;
+        nextAllowedWsConnectAt = Date.now() + backoffMs;
+        runtime.error?.(
+          `[${account.accountId}] WS connect failed due to rate limit (wstoken). ` +
+            `Backing off for ${Math.ceil(backoffMs / 1000)}s before retrying.`,
+        );
+      }
+
+      runtime.error?.(
+        // NOTE: use [default] prefix to match existing log style.
+        `[default] WS subscription failed (NO WS push will be received until fixed). ` +
+          `accountId=${account.accountId}. ` +
+          `Reason=${e?.name ?? 'Error'}: ${e?.message ?? String(err)}\n` +
+          `Where=createSubscription()->wsExt.subscribe()\n` +
+          `LikelyCause: underlying WebSocket object does not implement addEventListener (required by @rc-ex/ws), OR ws connect failed earlier and was swallowed.\n` +
+          `EventFilters=${JSON.stringify([
+            "/restapi/v1.0/glip/posts",
+            "/restapi/v1.0/glip/groups",
+          ])}\n` +
+          `Stack:\n${msg}`,
+      );
       scheduleReconnect();
     }
   };
