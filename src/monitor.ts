@@ -496,7 +496,10 @@ async function processMessageWithPipeline(params: {
     Body: body,
     RawBody: rawBody,
     CommandBody: rawBody,
-    From: `ringcentral:${senderId}`,
+    // IMPORTANT:
+    // Moltbot derives group metadata (groupId/displayName) from ctx.From for group/channel chats.
+    // So for RingCentral groups we must include the conversation id (chatId) in From.
+    From: isGroup ? `ringcentral:group:${chatId}` : `ringcentral:${senderId}`,
     To: `ringcentral:${chatId}`,
     SessionKey: route.sessionKey,
     AccountId: route.accountId,
