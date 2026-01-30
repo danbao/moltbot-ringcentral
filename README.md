@@ -1,6 +1,6 @@
-# Moltbot RingCentral Channel
+# OpenClaw RingCentral Channel
 
-RingCentral Team Messaging channel plugin for Moltbot. Enables bidirectional messaging with AI assistants through RingCentral Team Messaging.
+RingCentral Team Messaging channel plugin for OpenClaw. Enables bidirectional messaging with AI assistants through RingCentral Team Messaging.
 
 ## Features
 
@@ -18,37 +18,42 @@ RingCentral Team Messaging channel plugin for Moltbot. Enables bidirectional mes
 ## Installation
 
 ```bash
-curl -fsSL https://clawd.bot/install.sh | bash -s -- --beta
-moltbot plugins install moltbot-ringcentral@2026.1.29-beta4
-moltbot config set channels.ringcentral.enabled true
-moltbot config set channels.ringcentral.credentials.clientId "your-client-id"
-moltbot config set channels.ringcentral.credentials.clientSecret "your-client-secret"
-moltbot config set channels.ringcentral.credentials.jwt "your-jwt-token"
-moltbot config set channels.ringcentral.credentials.server "https://platform.ringcentral.com"
-moltbot gateway restart
+npm install -g openclaw@latest
+openclaw onboard --install-daemon
+
+openclaw plugins install openclaw-ringcentral
+openclaw config set channels.ringcentral.enabled true
+openclaw config set channels.ringcentral.credentials.clientId "your-client-id"
+openclaw config set channels.ringcentral.credentials.clientSecret "your-client-secret"
+openclaw config set channels.ringcentral.credentials.jwt "your-jwt-token"
+openclaw config set channels.ringcentral.credentials.server "https://platform.ringcentral.com"
+openclaw gateway restart
 ```
 
 Or install from tarball:
 
 ```bash
-moltbot plugins install ./moltbot-ringcentral-2026.1.29-beta4.tgz
+npm pack
+openclaw plugins install ./openclaw-ringcentral-<version>.tgz
 ```
 
 ## RingCentral App Setup
 
 1. Go to [RingCentral Developer Portal](https://developers.ringcentral.com/)
 2. Create a new app:
-   - **App Type**: REST API App
+   - **App Type**: REST API App (most common)
    - **Auth**: JWT auth flow
 3. Add permissions:
    - **Team Messaging** - Read and send messages
    - **WebSocket Subscriptions** - Real-time event subscriptions
    - **Read Accounts** - Read user information
+   - **Read Messages** - Read messages
+   - **WebSocket** - WebSocket access
 4. Generate a JWT token for your user
 
 ## Configuration
 
-Add to `~/.moltbot/moltbot.json`:
+Add to `~/.openclaw/openclaw.json`:
 
 ```json
 {
@@ -93,10 +98,10 @@ export RINGCENTRAL_JWT="your-jwt-token"
 
 ## Usage
 
-1. Start the moltbot gateway:
+1. Start the openclaw gateway:
 
 ```bash
-moltbot gateway run
+openclaw gateway run
 ```
 
 2. Open RingCentral app and go to your "Personal" chat (conversation with yourself)
@@ -175,7 +180,7 @@ Add **WebSocket Subscriptions** permission in your app settings. Permission chan
 
 1. Check that `selfOnly` mode matches your use case
 2. Verify you're sending messages in a "Personal" chat (conversation with yourself)
-3. Check gateway logs: `tail -f /tmp/moltbot/moltbot-*.log | grep ringcentral`
+3. Check gateway logs: `tail -f /tmp/openclaw/openclaw-*.log | grep ringcentral`
 
 ### Rate limit errors
 

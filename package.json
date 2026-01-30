@@ -1,6 +1,6 @@
 {
   "name": "openclaw-ringcentral",
-  "version": "2026.1.29-beta2",
+  "version": "2026.1.29",
   "type": "module",
   "main": "index.ts",
   "description": "OpenClaw RingCentral Team Messaging channel plugin",
@@ -20,6 +20,8 @@
   },
   "keywords": [
     "openclaw",
+    "moltbot",
+    "clawdbot",
     "ringcentral",
     "team-messaging",
     "chat",
