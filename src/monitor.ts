@@ -1003,30 +1003,37 @@ export async function startRingCentralMonitor(
         // ignore
       }
 
-      // Track current user ID to filter out self messages.
-      // NOTE: This hits the Platform REST API and can be rate-limited. We should treat
-      // it as best-effort and back off on 429 / rate limit.
+      // Determine ownerId (the JWT user's extension id) for self-message filtering.
+      // Prefer local config (no network) to avoid rate limiting.
+      // Fallback to REST only when needed.
+      if (!ownerId) {
+        const allowFrom =
+          (account.config.dm?.allowFrom ?? account.config.allowFrom ?? []).map((v) => String(v));
+        const allowFromFirst = allowFrom[0]?.trim();
+
+        // If allowFrom[0] is configured, treat it as the current user id.
+        // (This is consistent with your setup where you put your own id in allowFrom.)
+        if (allowFromFirst) {
+          ownerId = allowFromFirst;
+          runtime.log?.(`[${account.accountId}] ownerId set from config allowFrom[0]: ${ownerId}`);
+        }
+      }
+
+      // Fallback: query current extension via REST (may be rate-limited)
       if (!ownerId) {
         try {
           const platform = mgr.sdk.platform();
           const response = await platform.get("/restapi/v1.0/account/~/extension/~");
           const userInfo = await response.json();
           ownerId = userInfo?.id?.toString();
-          runtime.log?.(`[${account.accountId}] Authenticated as extension: ${ownerId}`);
+          runtime.log?.(`[${account.accountId}] Authenticated as extension (REST): ${ownerId}`);
         } catch (err) {
           const msg = String(err);
-          const isRate = msg.toLowerCase().includes("rate") || msg.includes("429");
-          if (isRate) {
-            runtime.error?.(
-              `[${account.accountId}] Failed to get current user (rate-limited). ` +
-                `Will continue without ownerId and retry later. err=${msg}`,
-            );
-          } else {
-            runtime.error?.(`[${account.accountId}] Failed to get current user: ${msg}`);
-          }
-
-          // Backoff: avoid hammering if startAccount is retried/restarted.
-          // (nextAllowedWsConnectAt is a module-level guard already used for WS connects)
+          runtime.error?.(
+            `[${account.accountId}] Failed to get current user (REST, best-effort): ${msg}. ` +
+              `Continuing without ownerId; self-message filtering may be degraded temporarily.`,
+          );
+          // Backoff a bit to avoid hammering
           nextAllowedWsConnectAt = Date.now() + 60_000;
         }
       }
