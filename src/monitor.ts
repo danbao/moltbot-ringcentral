@@ -364,15 +364,27 @@ async function processMessageWithPipeline(params: {
   // Fetch chat info to determine type
   let chatType = "Group";
   let chatName: string | undefined;
+  let chatInfo: any | undefined;
   try {
-    const chatInfo = await getRingCentralChat({ account, chatId });
+    chatInfo = await getRingCentralChat({ account, chatId });
     chatType = chatInfo?.type ?? "Group";
     chatName = chatInfo?.name ?? undefined;
-    // DEBUG: dump minimal chatInfo fields for name resolution
-    runtime.log?.(`[${account.accountId}] chatInfo: id=${chatId} type=${chatInfo?.type ?? null} name=${JSON.stringify(chatInfo?.name ?? null)} description=${JSON.stringify((chatInfo as any)?.description ?? null)}`);
+
+    const debugMode = Boolean(account.config.debugMode ?? (account.config as any).debug?.enabled);
+    if (debugMode) {
+      runtime.log?.(
+        `[${account.accountId}] debug inbound chatInfo: ` +
+          `id=${chatId} type=${chatInfo?.type ?? null} name=${JSON.stringify(chatInfo?.name ?? null)} ` +
+          `members=${JSON.stringify(chatInfo?.members ?? null)} description=${JSON.stringify(chatInfo?.description ?? null)}`,
+      );
+    } else {
+      // Keep minimal info log as before
+      runtime.log?.(
+        `[${account.accountId}] chatInfo: id=${chatId} type=${chatInfo?.type ?? null} name=${JSON.stringify(chatInfo?.name ?? null)} description=${JSON.stringify(chatInfo?.description ?? null)}`,
+      );
+    }
   } catch (err) {
     // If we can't fetch chat info, assume it's a group.
-    // DEBUG: log error so we can understand why chatName isn't available.
     runtime.error?.(`[${account.accountId}] getRingCentralChat failed: ${String(err)}`);
   }
 
@@ -988,7 +1000,7 @@ export async function startRingCentralMonitor(
       // Track current user ID to filter out self messages
       if (!ownerId) {
         try {
-          const platform = sdk.platform();
+          const platform = mgr.sdk.platform();
           const response = await platform.get("/restapi/v1.0/account/~/extension/~");
           const userInfo = await response.json();
           ownerId = userInfo?.id?.toString();
