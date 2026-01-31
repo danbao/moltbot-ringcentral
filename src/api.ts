@@ -9,6 +9,7 @@ import type {
   RingCentralCompany,
   RingCentralAttachment,
   RingCentralAdaptiveCard,
+  RingCentralTask,
 } from "./types.js";
 
 // Team Messaging API endpoints
@@ -476,6 +477,129 @@ export async function removeRingCentralFavoriteChat(params: {
   const { account, chatId } = params;
   const platform = await getRingCentralPlatform(account);
   await platform.delete(`${TM_API_BASE}/favorites/${chatId}`);
+}
+
+// Tasks API
+export async function listRingCentralTasks(params: {
+  account: ResolvedRingCentralAccount;
+  chatId: string;
+  assigneeId?: string;
+  assigneeStatus?: "Pending" | "Completed";
+  assignmentStatus?: "Unassigned" | "Assigned";
+  status?: "Pending" | "InProgress" | "Completed";
+  limit?: number;
+  pageToken?: string;
+}): Promise<{ records: RingCentralTask[]; navigation?: { nextPageToken?: string } }> {
+  const { account, chatId, assigneeId, assigneeStatus, assignmentStatus, status, limit, pageToken } = params;
+  const platform = await getRingCentralPlatform(account);
+
+  const queryParams: Record<string, string> = {};
+  if (assigneeId) queryParams.assigneeId = assigneeId;
+  if (assigneeStatus) queryParams.assigneeStatus = assigneeStatus;
+  if (assignmentStatus) queryParams.assignmentStatus = assignmentStatus;
+  if (status) queryParams.status = status;
+  if (limit) queryParams.recordCount = String(limit);
+  if (pageToken) queryParams.pageToken = pageToken;
+
+  const response = await platform.get(`${TM_API_BASE}/chats/${chatId}/tasks`, queryParams);
+  const result = (await response.json()) as {
+    records?: RingCentralTask[];
+    navigation?: { prevPageToken?: string; nextPageToken?: string };
+  };
+  return {
+    records: result.records ?? [],
+    navigation: result.navigation,
+  };
+}
+
+export async function createRingCentralTask(params: {
+  account: ResolvedRingCentralAccount;
+  chatId: string;
+  subject: string;
+  assignees?: Array<{ id: string }>;
+  completenessCondition?: "Simple" | "AllAssignees" | "Percentage";
+  startDate?: string;
+  dueDate?: string;
+  color?: "Black" | "Red" | "Orange" | "Yellow" | "Green" | "Blue" | "Purple" | "Magenta";
+  section?: string;
+  description?: string;
+  recurrence?: {
+    schedule?: "None" | "Daily" | "Weekdays" | "Weekly" | "Monthly" | "Yearly";
+    endingCondition?: "None" | "Count" | "Date";
+    endingAfter?: number;
+    endingOn?: string;
+  };
+  attachments?: Array<{ id: string }>;
+}): Promise<RingCentralTask> {
+  const { account, chatId, ...taskData } = params;
+  const platform = await getRingCentralPlatform(account);
+
+  const response = await platform.post(`${TM_API_BASE}/chats/${chatId}/tasks`, taskData);
+  return (await response.json()) as RingCentralTask;
+}
+
+export async function getRingCentralTask(params: {
+  account: ResolvedRingCentralAccount;
+  chatId: string;
+  taskId: string;
+}): Promise<RingCentralTask | null> {
+  const { account, chatId, taskId } = params;
+  const platform = await getRingCentralPlatform(account);
+
+  try {
+    const response = await platform.get(`${TM_API_BASE}/chats/${chatId}/tasks/${taskId}`);
+    return (await response.json()) as RingCentralTask;
+  } catch {
+    return null;
+  }
+}
+
+export async function updateRingCentralTask(params: {
+  account: ResolvedRingCentralAccount;
+  chatId: string;
+  taskId: string;
+  subject?: string;
+  assignees?: Array<{ id: string }>;
+  completenessCondition?: "Simple" | "AllAssignees" | "Percentage";
+  startDate?: string;
+  dueDate?: string;
+  color?: "Black" | "Red" | "Orange" | "Yellow" | "Green" | "Blue" | "Purple" | "Magenta";
+  section?: string;
+  description?: string;
+}): Promise<RingCentralTask> {
+  const { account, chatId, taskId, ...taskData } = params;
+  const platform = await getRingCentralPlatform(account);
+
+  const response = await platform.patch(`${TM_API_BASE}/chats/${chatId}/tasks/${taskId}`, taskData);
+  return (await response.json()) as RingCentralTask;
+}
+
+export async function deleteRingCentralTask(params: {
+  account: ResolvedRingCentralAccount;
+  chatId: string;
+  taskId: string;
+}): Promise<void> {
+  const { account, chatId, taskId } = params;
+  const platform = await getRingCentralPlatform(account);
+  await platform.delete(`${TM_API_BASE}/chats/${chatId}/tasks/${taskId}`);
+}
+
+export async function completeRingCentralTask(params: {
+  account: ResolvedRingCentralAccount;
+  chatId: string;
+  taskId: string;
+  status: "Incomplete" | "Complete";
+  assignees?: Array<{ id: string }>;
+  completenessPercentage?: number;
+}): Promise<void> {
+  const { account, chatId, taskId, status, assignees, completenessPercentage } = params;
+  const platform = await getRingCentralPlatform(account);
+
+  const body: Record<string, unknown> = { status };
+  if (assignees) body.assignees = assignees;
+  if (completenessPercentage !== undefined) body.completenessPercentage = completenessPercentage;
+
+  await platform.post(`${TM_API_BASE}/chats/${chatId}/tasks/${taskId}/complete`, body);
 }
 
 export async function probeRingCentral(

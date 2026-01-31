@@ -240,6 +240,38 @@ describe("Favorite Chats API", () => {
   });
 });
 
+describe("Tasks API", () => {
+  it("listRingCentralTasks should be exported", async () => {
+    const { listRingCentralTasks } = await import("./api.js");
+    expect(typeof listRingCentralTasks).toBe("function");
+  });
+
+  it("createRingCentralTask should be exported", async () => {
+    const { createRingCentralTask } = await import("./api.js");
+    expect(typeof createRingCentralTask).toBe("function");
+  });
+
+  it("getRingCentralTask should be exported", async () => {
+    const { getRingCentralTask } = await import("./api.js");
+    expect(typeof getRingCentralTask).toBe("function");
+  });
+
+  it("updateRingCentralTask should be exported", async () => {
+    const { updateRingCentralTask } = await import("./api.js");
+    expect(typeof updateRingCentralTask).toBe("function");
+  });
+
+  it("deleteRingCentralTask should be exported", async () => {
+    const { deleteRingCentralTask } = await import("./api.js");
+    expect(typeof deleteRingCentralTask).toBe("function");
+  });
+
+  it("completeRingCentralTask should be exported", async () => {
+    const { completeRingCentralTask } = await import("./api.js");
+    expect(typeof completeRingCentralTask).toBe("function");
+  });
+});
+
 describe("probeRingCentral", () => {
   it("should be exported", async () => {
     const { probeRingCentral } = await import("./api.js");
