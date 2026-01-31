@@ -198,7 +198,7 @@ This plugin implements the following RingCentral Team Messaging APIs:
 | **Chats** | List Chats, Get Chat | `TeamMessaging` |
 | **Posts** | Create, Update, Delete Post | `TeamMessaging` |
 | **Adaptive Cards** | Create, Get, Update, Delete | `TeamMessaging` |
-| **Profile** | Get Person, Get Current User | `ReadAccounts` |
+| **Profile** | Get Person, Get Current User, Get Company Info | `ReadAccounts`, `TeamMessaging` |
 | **Attachments** | Upload, Download | `TeamMessaging` |
 
 ### Not Yet Implemented

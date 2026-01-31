@@ -175,6 +175,13 @@ describe("User API", () => {
   });
 });
 
+describe("Company API", () => {
+  it("getRingCentralCompanyInfo should be exported", async () => {
+    const { getRingCentralCompanyInfo } = await import("./api.js");
+    expect(typeof getRingCentralCompanyInfo).toBe("function");
+  });
+});
+
 describe("Attachment API", () => {
   it("uploadRingCentralAttachment should be exported", async () => {
     const { uploadRingCentralAttachment } = await import("./api.js");
