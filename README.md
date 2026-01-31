@@ -9,6 +9,7 @@ RingCentral Team Messaging channel plugin for OpenClaw. Enables bidirectional me
 - Self-only mode (talk to AI as yourself)
 - Support for text messages and attachments
 - Typing indicators
+- Adaptive Cards support (create, read, update, delete)
 
 ## Prerequisites
 
@@ -196,9 +197,9 @@ This plugin implements the following RingCentral Team Messaging APIs:
 |----------|------|-----------------|
 | **Chats** | List Chats, Get Chat | `TeamMessaging` |
 | **Conversations** | List, Get, Create/Open | `TeamMessaging` |
-| **Posts** | Create, Update, Delete | `TeamMessaging` |
-| **Adaptive Cards** | Create, Update, Delete | `TeamMessaging` |
-| **Profile** | Get Person, Get Current User | `ReadAccounts` |
+| **Posts** | List Posts, Get Post, Create, Update, Delete | `TeamMessaging` |
+| **Adaptive Cards** | Create, Get, Update, Delete | `TeamMessaging` |
+| **Profile** | Get Person, Get Current User, Get Company Info | `ReadAccounts`, `TeamMessaging` |
 | **Attachments** | Upload, Download | `TeamMessaging` |
 
 ### Not Yet Implemented

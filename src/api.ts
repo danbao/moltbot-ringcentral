@@ -6,6 +6,7 @@ import type {
   RingCentralConversation,
   RingCentralPost,
   RingCentralUser,
+  RingCentralCompany,
   RingCentralAttachment,
   RingCentralAdaptiveCard,
 } from "./types.js";
@@ -154,6 +155,46 @@ export async function deleteRingCentralMessage(params: {
   await platform.delete(`${TM_API_BASE}/chats/${chatId}/posts/${postId}`);
 }
 
+export async function getRingCentralPost(params: {
+  account: ResolvedRingCentralAccount;
+  chatId: string;
+  postId: string;
+}): Promise<RingCentralPost | null> {
+  const { account, chatId, postId } = params;
+  const platform = await getRingCentralPlatform(account);
+
+  try {
+    const response = await platform.get(`${TM_API_BASE}/chats/${chatId}/posts/${postId}`);
+    return (await response.json()) as RingCentralPost;
+  } catch {
+    return null;
+  }
+}
+
+export async function listRingCentralPosts(params: {
+  account: ResolvedRingCentralAccount;
+  chatId: string;
+  limit?: number;
+  pageToken?: string;
+}): Promise<{ records: RingCentralPost[]; navigation?: { prevPageToken?: string; nextPageToken?: string } }> {
+  const { account, chatId, limit, pageToken } = params;
+  const platform = await getRingCentralPlatform(account);
+
+  const queryParams: Record<string, string> = {};
+  if (limit) queryParams.recordCount = String(limit);
+  if (pageToken) queryParams.pageToken = pageToken;
+
+  const response = await platform.get(`${TM_API_BASE}/chats/${chatId}/posts`, queryParams);
+  const result = (await response.json()) as {
+    records?: RingCentralPost[];
+    navigation?: { prevPageToken?: string; nextPageToken?: string };
+  };
+  return {
+    records: result.records ?? [],
+    navigation: result.navigation,
+  };
+}
+
 export async function getRingCentralChat(params: {
   account: ResolvedRingCentralAccount;
   chatId: string;
@@ -269,6 +310,20 @@ export async function getCurrentRingCentralUser(params: {
   }
 }
 
+export async function getRingCentralCompanyInfo(params: {
+  account: ResolvedRingCentralAccount;
+}): Promise<RingCentralCompany | null> {
+  const { account } = params;
+  const platform = await getRingCentralPlatform(account);
+
+  try {
+    const response = await platform.get(`${TM_API_BASE}/companies/~`);
+    return (await response.json()) as RingCentralCompany;
+  } catch {
+    return null;
+  }
+}
+
 export async function uploadRingCentralAttachment(params: {
   account: ResolvedRingCentralAccount;
   chatId: string;
@@ -357,6 +412,21 @@ export async function updateRingCentralAdaptiveCard(params: {
   const response = await platform.put(`${TM_API_BASE}/adaptive-cards/${cardId}`, body);
   const result = (await response.json()) as { id?: string };
   return { cardId: result.id };
+}
+
+export async function getRingCentralAdaptiveCard(params: {
+  account: ResolvedRingCentralAccount;
+  cardId: string;
+}): Promise<RingCentralAdaptiveCard | null> {
+  const { account, cardId } = params;
+  const platform = await getRingCentralPlatform(account);
+
+  try {
+    const response = await platform.get(`${TM_API_BASE}/adaptive-cards/${cardId}`);
+    return (await response.json()) as RingCentralAdaptiveCard;
+  } catch {
+    return null;
+  }
 }
 
 export async function deleteRingCentralAdaptiveCard(params: {

@@ -113,6 +113,11 @@ describe("Adaptive Card API", () => {
     vi.clearAllMocks();
   });
 
+  it("getRingCentralAdaptiveCard should be exported", async () => {
+    const { getRingCentralAdaptiveCard } = await import("./api.js");
+    expect(typeof getRingCentralAdaptiveCard).toBe("function");
+  });
+
   it("sendRingCentralAdaptiveCard should be exported", async () => {
     const { sendRingCentralAdaptiveCard } = await import("./api.js");
     expect(typeof sendRingCentralAdaptiveCard).toBe("function");
@@ -158,6 +163,18 @@ describe("Conversation API", () => {
   });
 });
 
+describe("Post API", () => {
+  it("getRingCentralPost should be exported", async () => {
+    const { getRingCentralPost } = await import("./api.js");
+    expect(typeof getRingCentralPost).toBe("function");
+  });
+
+  it("listRingCentralPosts should be exported", async () => {
+    const { listRingCentralPosts } = await import("./api.js");
+    expect(typeof listRingCentralPosts).toBe("function");
+  });
+});
+
 describe("Message API", () => {
   it("sendRingCentralMessage should be exported", async () => {
     const { sendRingCentralMessage } = await import("./api.js");
@@ -184,6 +201,13 @@ describe("User API", () => {
   it("getCurrentRingCentralUser should be exported", async () => {
     const { getCurrentRingCentralUser } = await import("./api.js");
     expect(typeof getCurrentRingCentralUser).toBe("function");
+  });
+});
+
+describe("Company API", () => {
+  it("getRingCentralCompanyInfo should be exported", async () => {
+    const { getRingCentralCompanyInfo } = await import("./api.js");
+    expect(typeof getRingCentralCompanyInfo).toBe("function");
   });
 });
 
