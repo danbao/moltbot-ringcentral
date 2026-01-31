@@ -70,7 +70,7 @@ function buildWsManagerKey(account: ResolvedRingCentralAccount): string {
 
 async function getOrCreateWsManager(
   account: ResolvedRingCentralAccount,
-  runtime: RingCentralRuntimeEnv,
+  logger: RingCentralLogger,
 ): Promise<WsManager> {
   const key = buildWsManagerKey(account);
   const cached = wsManagers.get(account.accountId);
@@ -91,7 +91,7 @@ async function getOrCreateWsManager(
     throw new Error("Subscriptions.rc.installExtension is unavailable; cannot install WS extension");
   }
 
-  runtime.log?.(`[${account.accountId}] Installing @rc-ex/ws extension (singleton)...`);
+  logger.debug(`[${account.accountId}] Installing @rc-ex/ws extension (singleton)...`);
   await rc.installExtension(wsExt);
 
   const mgr: WsManager = { key, sdk, subscriptions, rc, wsExt };
@@ -102,7 +102,7 @@ async function getOrCreateWsManager(
 async function ensureWsConnected(
   mgr: WsManager,
   account: ResolvedRingCentralAccount,
-  runtime: RingCentralRuntimeEnv,
+  logger: RingCentralLogger,
 ): Promise<void> {
   // If already connected/open, nothing to do.
   const ws = mgr.wsExt.ws;
@@ -114,7 +114,7 @@ async function ensureWsConnected(
   }
 
   mgr.connectPromise = (async () => {
-    runtime.log?.(`[${account.accountId}] Forcing WS connect() (singleton)...`);
+    logger.debug(`[${account.accountId}] Forcing WS connect() (singleton)...`);
     await mgr.wsExt.connect(false);
     mgr.lastConnectAt = Date.now();
     if (!mgr.wsExt.ws) {
@@ -278,6 +278,7 @@ async function processMessageWithPipeline(params: {
   ownerId?: string;
 }): Promise<void> {
   const { eventBody, account, config, runtime, core, statusSink, ownerId } = params;
+  const logger = getLogger(core);
   const mediaMaxMb = account.config.mediaMaxMb ?? 20;
   
   const chatId = eventBody.groupId ?? "";
@@ -308,7 +309,7 @@ async function processMessageWithPipeline(params: {
   // This is because the bot uses the JWT user's identity, so we're essentially
   // having a conversation with ourselves (the AI assistant)
   const selfOnly = account.config.selfOnly !== false; // default true
-  runtime.log?.(`[${account.accountId}] Processing message: senderId=${senderId}, ownerId=${ownerId}, selfOnly=${selfOnly}, chatId=${chatId}`);
+  logger.debug(`[${account.accountId}] Processing message: senderId=${senderId}, ownerId=${ownerId}, selfOnly=${selfOnly}, chatId=${chatId}`);
   
   if (selfOnly && ownerId) {
     if (senderId !== ownerId) {
@@ -317,7 +318,7 @@ async function processMessageWithPipeline(params: {
     }
   }
   
-  runtime.log?.(`[${account.accountId}] Message passed selfOnly check`);
+  logger.debug(`[${account.accountId}] Message passed selfOnly check`);
 
   // Fetch chat info to determine type
   let chatType = "Group";
@@ -333,7 +334,7 @@ async function processMessageWithPipeline(params: {
   // Personal, PersonalChat, Direct are all DM types
   const isPersonalChat = chatType === "Personal" || chatType === "PersonalChat";
   const isGroup = chatType !== "Direct" && chatType !== "PersonalChat" && chatType !== "Personal";
-  runtime.log?.(`[${account.accountId}] Chat type: ${chatType}, isGroup: ${isGroup}`);
+  logger.debug(`[${account.accountId}] Chat type: ${chatType}, isGroup: ${isGroup}`);
 
   // In selfOnly mode, only allow "Personal" chat (conversation with yourself)
   if (selfOnly && !isPersonalChat) {
@@ -538,7 +539,7 @@ async function processMessageWithPipeline(params: {
       ctx: ctxPayload,
     })
     .catch((err) => {
-      runtime.error?.(`ringcentral: failed updating session meta: ${String(err)}`);
+      logger.error(`ringcentral: failed updating session meta: ${String(err)}`);
     });
 
   // Typing indicator disabled - respond directly without "thinking" message
@@ -552,7 +553,6 @@ async function processMessageWithPipeline(params: {
           payload,
           account,
           chatId,
-          runtime,
           core,
           config,
           statusSink,
@@ -560,7 +560,7 @@ async function processMessageWithPipeline(params: {
         });
       },
       onError: (err, info) => {
-        runtime.error?.(
+        logger.error(
           `[${account.accountId}] RingCentral ${info.kind} reply failed: ${String(err)}`,
         );
       },
@@ -592,13 +592,13 @@ async function deliverRingCentralReply(params: {
   payload: { text?: string; mediaUrls?: string[]; mediaUrl?: string };
   account: ResolvedRingCentralAccount;
   chatId: string;
-  runtime: RingCentralRuntimeEnv;
   core: RingCentralCoreRuntime;
   config: OpenClawConfig;
   statusSink?: (patch: { lastInboundAt?: number; lastOutboundAt?: number }) => void;
   typingPostId?: string;
 }): Promise<void> {
-  const { payload, account, chatId, runtime, core, config, statusSink, typingPostId } = params;
+  const { payload, account, chatId, core, config, statusSink, typingPostId } = params;
+  const logger = getLogger(core);
   const mediaList = payload.mediaUrls?.length
     ? payload.mediaUrls
     : payload.mediaUrl
@@ -615,7 +615,7 @@ async function deliverRingCentralReply(params: {
           postId: typingPostId,
         });
       } catch (err) {
-        runtime.error?.(`RingCentral typing cleanup failed: ${String(err)}`);
+        logger.error(`RingCentral typing cleanup failed: ${String(err)}`);
         const fallbackText = payload.text?.trim()
           ? payload.text
           : mediaList.length > 1
@@ -630,7 +630,7 @@ async function deliverRingCentralReply(params: {
           });
           suppressCaption = Boolean(payload.text?.trim());
         } catch (updateErr) {
-          runtime.error?.(`RingCentral typing update failed: ${String(updateErr)}`);
+          logger.error(`RingCentral typing update failed: ${String(updateErr)}`);
         }
       }
     }
@@ -661,7 +661,7 @@ async function deliverRingCentralReply(params: {
         if (sendResult?.postId) trackSentMessageId(sendResult.postId);
         statusSink?.({ lastOutboundAt: Date.now() });
       } catch (err) {
-        runtime.error?.(`RingCentral attachment send failed: ${String(err)}`);
+        logger.error(`RingCentral attachment send failed: ${String(err)}`);
       }
     }
     return;
@@ -700,7 +700,7 @@ async function deliverRingCentralReply(params: {
         }
         statusSink?.({ lastOutboundAt: Date.now() });
       } catch (err) {
-        runtime.error?.(`RingCentral message send failed: ${String(err)}`);
+        logger.error(`RingCentral message send failed: ${String(err)}`);
       }
     }
   }
@@ -739,7 +739,7 @@ export async function startRingCentralMonitor(
 
     if (Date.now() < nextAllowedWsConnectAt) {
       const waitMs = nextAllowedWsConnectAt - Date.now();
-      runtime.log?.(
+      logger.warn(
         `[${account.accountId}] WS connect is rate-limited locally; will retry in ${Math.ceil(waitMs / 1000)}s`,
       );
       scheduleReconnect();
@@ -748,10 +748,10 @@ export async function startRingCentralMonitor(
 
     try {
       // Get or create WS manager (singleton per account)
-      const mgr = await getOrCreateWsManager(account, runtime);
+      const mgr = await getOrCreateWsManager(account, logger);
 
       // Force connect once per account (with in-flight de-dupe)
-      await ensureWsConnected(mgr, account, runtime);
+      await ensureWsConnected(mgr, account, logger);
 
       const subscription = mgr.subscriptions.createSubscription();
 
@@ -769,7 +769,7 @@ export async function startRingCentralMonitor(
         const subsVer = (await import("@ringcentral/subscriptions/package.json", { with: { type: "json" } } as any))?.default?.version;
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const rcwsVer = (await import("@rc-ex/ws/package.json", { with: { type: "json" } } as any))?.default?.version;
-        runtime.log?.(`[${account.accountId}] rc sdk versions: @ringcentral/sdk=${sdkVer} @ringcentral/subscriptions=${subsVer} @rc-ex/ws=${rcwsVer}`);
+        logger.debug(`[${account.accountId}] rc sdk versions: @ringcentral/sdk=${sdkVer} @ringcentral/subscriptions=${subsVer} @rc-ex/ws=${rcwsVer}`);
       } catch {
         // ignore
       }
