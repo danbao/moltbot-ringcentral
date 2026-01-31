@@ -13,6 +13,8 @@ import {
   downloadRingCentralAttachment,
   uploadRingCentralAttachment,
   getRingCentralChat,
+  extractRcApiError,
+  formatRcApiError,
 } from "./api.js";
 import { getRingCentralRuntime } from "./runtime.js";
 import type {
@@ -615,7 +617,8 @@ async function deliverRingCentralReply(params: {
           postId: typingPostId,
         });
       } catch (err) {
-        logger.error(`RingCentral typing cleanup failed: ${String(err)}`);
+        const errInfo = formatRcApiError(extractRcApiError(err, account.accountId));
+        logger.error(`RingCentral typing cleanup failed: ${errInfo}`);
         const fallbackText = payload.text?.trim()
           ? payload.text
           : mediaList.length > 1
@@ -630,7 +633,8 @@ async function deliverRingCentralReply(params: {
           });
           suppressCaption = Boolean(payload.text?.trim());
         } catch (updateErr) {
-          logger.error(`RingCentral typing update failed: ${String(updateErr)}`);
+          const updateErrInfo = formatRcApiError(extractRcApiError(updateErr, account.accountId));
+          logger.error(`RingCentral typing update failed: ${updateErrInfo}`);
         }
       }
     }
@@ -661,7 +665,8 @@ async function deliverRingCentralReply(params: {
         if (sendResult?.postId) trackSentMessageId(sendResult.postId);
         statusSink?.({ lastOutboundAt: Date.now() });
       } catch (err) {
-        logger.error(`RingCentral attachment send failed: ${String(err)}`);
+        const errInfo = formatRcApiError(extractRcApiError(err, account.accountId));
+        logger.error(`RingCentral attachment send failed: ${errInfo}`);
       }
     }
     return;
@@ -700,7 +705,8 @@ async function deliverRingCentralReply(params: {
         }
         statusSink?.({ lastOutboundAt: Date.now() });
       } catch (err) {
-        logger.error(`RingCentral message send failed: ${String(err)}`);
+        const errInfo = formatRcApiError(extractRcApiError(err, account.accountId));
+        logger.error(`RingCentral message send failed: ${errInfo}`);
       }
     }
   }
