@@ -37,6 +37,25 @@ export type RingCentralConversation = {
   lastModifiedTime?: string;
 };
 
+export type RingCentralEvent = {
+  id?: string;
+  chatId?: string;
+  creatorId?: string;
+  title?: string;
+  startTime?: string;
+  endTime?: string;
+  allDay?: boolean;
+  recurrence?: "None" | "Day" | "Weekday" | "Week" | "Month" | "Year";
+  endingCondition?: "None" | "Count" | "Date";
+  endingAfter?: number;
+  endingOn?: string;
+  color?: "Black" | "Red" | "Orange" | "Yellow" | "Green" | "Blue" | "Purple" | "Magenta";
+  location?: string;
+  description?: string;
+  creationTime?: string;
+  lastModifiedTime?: string;
+};
+
 export type RingCentralTask = {
   id?: string;
   chatId?: string;
