@@ -1,7 +1,9 @@
 import { Subscriptions } from "@ringcentral/subscriptions";
-import RcWsExtension, { Events as RcWsEvents } from "@rc-ex/ws";
+import RcWsExtension from "@rc-ex/ws";
 const WebSocketExtension = RcWsExtension.default ?? RcWsExtension;
 type WebSocketExtension = InstanceType<typeof WebSocketExtension>;
+import * as fs from "fs";
+import * as path from "path";
 
 import type { OpenClawConfig } from "openclaw/plugin-sdk";
 import { resolveMentionGatingWithBypass } from "openclaw/plugin-sdk";
@@ -15,6 +17,7 @@ import {
   downloadRingCentralAttachment,
   uploadRingCentralAttachment,
   getRingCentralChat,
+  getRingCentralUser,
   extractRcApiError,
   formatRcApiError,
 } from "./api.js";
@@ -33,6 +36,10 @@ export type RingCentralLogger = {
   error: (message: string) => void;
 };
 
+/**
+ * @deprecated Use OpenClaw logger (getLogger(core)) instead.
+ * Kept for backward compatibility but no longer used internally.
+ */
 export type RingCentralRuntimeEnv = {
   log?: (message: string) => void;
   error?: (message: string) => void;
@@ -169,6 +176,67 @@ function logVerbose(
 ) {
   if (core.logging.shouldLogVerbose()) {
     getLogger(core).debug(message);
+  }
+}
+
+/**
+ * Save group chat message to workspace memory file.
+ * File path: ${workspace}/memory/chats/YYYY-MM-DD/${chatId}.md
+ */
+async function saveGroupChatMessage(params: {
+  workspace: string;
+  chatId: string;
+  chatName?: string;
+  senderId: string;
+  messageText: string;
+  timestamp?: string;
+  logger: RingCentralLogger;
+}): Promise<void> {
+  const { workspace, chatId, chatName, senderId, messageText, timestamp, logger } = params;
+
+  if (!workspace) {
+    logger.debug(`[ringcentral] Cannot save chat message: workspace not configured`);
+    return;
+  }
+
+  try {
+    // Parse timestamp or use current time
+    const msgDate = timestamp ? new Date(timestamp) : new Date();
+    const dateStr = msgDate.toISOString().split("T")[0]; // YYYY-MM-DD
+    const timeStr = msgDate.toLocaleTimeString("zh-CN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: "Asia/Shanghai",
+    });
+
+    // Build file path
+    const chatDir = path.join(workspace, "memory", "chats", dateStr);
+    const filePath = path.join(chatDir, `${chatId}.md`);
+
+    // Ensure directory exists
+    await fs.promises.mkdir(chatDir, { recursive: true });
+
+    // Format message entry
+    const header = chatName ? `# ${chatName} (${chatId})\n\n` : `# Chat ${chatId}\n\n`;
+    const entry = `## ${timeStr} - ${senderId}\n${messageText}\n\n---\n\n`;
+
+    // Check if file exists; if not, write header first
+    let content = entry;
+    try {
+      await fs.promises.access(filePath);
+      // File exists, just append
+    } catch {
+      // File doesn't exist, prepend header
+      content = header + entry;
+    }
+
+    // Append to file
+    await fs.promises.appendFile(filePath, content === entry ? entry : content, "utf-8");
+
+    logger.debug(`[ringcentral] Saved chat message to ${filePath}`);
+  } catch (err) {
+    logger.error(`[ringcentral] Failed to save chat message: ${String(err)}`);
   }
 }
 
@@ -327,17 +395,133 @@ async function processMessageWithPipeline(params: {
   // Fetch chat info to determine type
   let chatType = "Group";
   let chatName: string | undefined;
+  let chatInfo: any | undefined;
   try {
-    const chatInfo = await getRingCentralChat({ account, chatId });
+    chatInfo = await getRingCentralChat({ account, chatId });
     chatType = chatInfo?.type ?? "Group";
     chatName = chatInfo?.name ?? undefined;
-  } catch {
-    // If we can't fetch chat info, assume it's a group
+
+    // OpenClaw logger respects configured log level - debug output controlled by openclaw config
+    logger.debug(
+      `[${account.accountId}] chatInfo: id=${chatId} type=${chatInfo?.type ?? null} ` +
+        `name=${JSON.stringify(chatInfo?.name ?? null)} members=${JSON.stringify(chatInfo?.members ?? null)} ` +
+        `description=${JSON.stringify(chatInfo?.description ?? null)}`,
+    );
+  } catch (err) {
+    // If we can't fetch chat info, assume it's a group.
+    logger.error(`[${account.accountId}] getRingCentralChat failed: ${String(err)}`);
   }
 
   // Personal, PersonalChat, Direct are all DM types
   const isPersonalChat = chatType === "Personal" || chatType === "PersonalChat";
-  const isGroup = chatType !== "Direct" && chatType !== "PersonalChat" && chatType !== "Personal";
+  const isDirectChat = chatType === "Direct";
+  const isGroup = !(isPersonalChat || isDirectChat);
+
+  // Only track configured groups; ignore any other group/team chats.
+  // NOTE: Direct/Personal chats are NOT subject to this filter.
+  const configuredGroups = account.config.groups ?? {};
+  const hasConfiguredGroups = Object.keys(configuredGroups).length > 0;
+  const isTrackedGroup = !isGroup
+    ? true
+    : Boolean(configuredGroups[chatId] || configuredGroups[String(chatId)] || configuredGroups[chatName ?? ""]);
+  if (isGroup && hasConfiguredGroups && !isTrackedGroup) {
+    logVerbose(core, `ignore group chat not in configured groups: chatId=${chatId}`);
+    return;
+  }
+
+  // Session key should be per conversation id (RingCentral chatId)
+  // NOTE: keep peer.kind stable for group vs dm.
+  // Session routing
+  // - Group/Team: route by conversation id (chatId)
+  // - DM/Person: route by the *peer userId* (not chatId)
+  //   Reason: some DM payloads/types can collapse to a "personal"/self chat id which would
+  //   incorrectly merge multiple DMs into one session.
+  const ownerIdNorm = normalizeUserId(ownerId);
+  const senderIdNorm = normalizeUserId(senderId);
+
+  // Best-effort: compute the other participant id from chatInfo.members when available.
+  // RingCentral DM members usually contains 2 userIds.
+  const chatMembers: string[] = Array.isArray((chatInfo as any)?.members)
+    ? ((chatInfo as any).members as any[]).map((v) => normalizeUserId(String(v)))
+    : [];
+  const dmPeerFromMembers = chatMembers.find((id) => id && id !== ownerIdNorm) || "";
+
+  const dmPeerUserId = !isGroup
+    ? (dmPeerFromMembers || (senderIdNorm !== ownerIdNorm ? senderIdNorm : ""))
+    : "";
+
+  const route = core.channel.routing.resolveAgentRoute({
+    cfg: config,
+    channel: "ringcentral",
+    accountId: account.accountId,
+    peer: {
+      kind: isGroup ? "group" : "dm",
+      id: isGroup ? chatId : (dmPeerUserId || chatId),
+    },
+  });
+
+  // META-ONLY: Always try to update session label/display metadata for group chats,
+  // even if the message will be dropped by allowlist/groupPolicy later.
+  // This keeps sessions list/dashboard readable (label from chatName) without changing reply policy.
+  try {
+    if (isGroup) {
+      const storePath = core.channel.session.resolveStorePath(config.session?.store, {
+        agentId: route.agentId,
+      });
+
+      // If RingCentral chat has no name (often true for Group chats), create a stable label
+      // by resolving up to 3 member first names and joining with commas.
+      let metaLabel: string;
+      if (chatName?.trim()) {
+        metaLabel = chatName.trim();
+      } else {
+        let fallbackParts: string[] = [];
+        try {
+          const memberIds = Array.isArray(chatInfo?.members) ? chatInfo!.members!.slice(0, 3) : [];
+          const memberNames = await Promise.all(
+            memberIds.map(async (id: string) => {
+              try {
+                const u = await getRingCentralUser({ account, userId: id });
+                return u?.firstName?.trim() || null;
+              } catch {
+                return null;
+              }
+            }),
+          );
+          fallbackParts = memberNames.filter((x): x is string => !!x);
+        } catch {
+          // ignore
+        }
+
+        metaLabel = fallbackParts.length > 0 ? fallbackParts.join(", ") : `chat:${chatId}`;
+      }
+
+      void core.channel.session
+        .recordSessionMetaFromInbound({
+          storePath,
+          sessionKey: route.sessionKey,
+          ctx: core.channel.reply.finalizeInboundContext({
+            Provider: "ringcentral",
+            Surface: "ringcentral",
+            From: `ringcentral:group:${chatId}`,
+            To: `ringcentral:${chatId}`,
+            OriginatingChannel: "ringcentral",
+            OriginatingTo: `ringcentral:${chatId}`,
+            ChatType: "channel",
+            AccountId: route.accountId,
+            SessionKey: route.sessionKey,
+            ConversationLabel: metaLabel,
+            GroupSpace: metaLabel,
+            GroupSubject: metaLabel,
+          }),
+        })
+        .catch((err) => {
+          logger.error(`ringcentral: meta-only session meta update failed: ${String(err)}`);
+        });
+    }
+  } catch (err) {
+    logger.error(`ringcentral: meta-only session meta update crashed: ${String(err)}`);
+  }
   logger.debug(`[${account.accountId}] Chat type: ${chatType}, isGroup: ${isGroup}`);
 
   // In selfOnly mode, only allow "Personal" chat (conversation with yourself)
@@ -358,23 +542,22 @@ async function processMessageWithPipeline(params: {
   let effectiveWasMentioned: boolean | undefined;
 
   if (isGroup) {
+    logger.debug(`[${account.accountId}] Entering group processing: chatId=${chatId}, groupPolicy=${groupPolicy}, groupEntry=${!!groupEntry}`);
     if (groupPolicy === "disabled") {
-      logVerbose(core, `drop group message (groupPolicy=disabled, chat=${chatId})`);
+      logger.debug(`[${account.accountId}] DROP: groupPolicy=disabled`);
       return;
     }
     const groupAllowlistConfigured = groupConfigResolved.allowlistConfigured;
     const groupAllowed =
       Boolean(groupEntry) || Boolean((account.config.groups ?? {})["*"]);
+    logger.debug(`[${account.accountId}] Allowlist check: configured=${groupAllowlistConfigured}, allowed=${groupAllowed}`);
     if (groupPolicy === "allowlist") {
       if (!groupAllowlistConfigured) {
-        logVerbose(
-          core,
-          `drop group message (groupPolicy=allowlist, no allowlist, chat=${chatId})`,
-        );
+        logger.debug(`[${account.accountId}] DROP: no allowlist configured`);
         return;
       }
       if (!groupAllowed) {
-        logVerbose(core, `drop group message (not allowlisted, chat=${chatId})`);
+        logger.debug(`[${account.accountId}] DROP: not in allowlist`);
         return;
       }
     }
@@ -389,6 +572,25 @@ async function processMessageWithPipeline(params: {
         logVerbose(core, `drop group message (sender not allowed, ${senderId})`);
         return;
       }
+    }
+
+    // Save group chat message to workspace for analysis/logging
+    // This happens AFTER allowlist check but BEFORE mention check,
+    // so we log all messages from monitored groups regardless of AI response
+    const workspace = account.config.workspace ?? (config.agents as any)?.defaults?.workspace;
+    logger.debug(`[${account.accountId}] Group message logging: workspace=${workspace}, chatId=${chatId}, senderId=${senderId}`);
+    if (workspace) {
+      void saveGroupChatMessage({
+        workspace,
+        chatId,
+        chatName,
+        senderId,
+        messageText: rawBody,
+        timestamp: eventBody.creationTime,
+        logger,
+      });
+    } else {
+      logger.debug(`[${account.accountId}] Skipping chat log: no workspace configured`);
     }
   }
 
@@ -467,16 +669,6 @@ async function processMessageWithPipeline(params: {
     return;
   }
 
-  const route = core.channel.routing.resolveAgentRoute({
-    cfg: config,
-    channel: "ringcentral",
-    accountId: account.accountId,
-    peer: {
-      kind: isGroup ? "group" : "dm",
-      id: chatId,
-    },
-  });
-
   let mediaPath: string | undefined;
   let mediaType: string | undefined;
   if (attachments.length > 0) {
@@ -488,9 +680,7 @@ async function processMessageWithPipeline(params: {
     }
   }
 
-  const fromLabel = isGroup
-    ? chatName || `chat:${chatId}`
-    : `user:${senderId}`;
+  // NOTE: label is set later via conversationLabel (after chatName lookup).
   const storePath = core.channel.session.resolveStorePath(config.session?.store, {
     agentId: route.agentId,
   });
@@ -501,7 +691,9 @@ async function processMessageWithPipeline(params: {
   });
   const body = core.channel.reply.formatAgentEnvelope({
     channel: "RingCentral",
-    from: fromLabel,
+    from: isGroup
+      ? (chatName?.trim() ? chatName.trim() : `chat:${chatId}`)
+      : `user:${senderId}`,
     timestamp: eventBody.creationTime ? Date.parse(eventBody.creationTime) : undefined,
     previousTimestamp,
     envelope: envelopeOptions,
@@ -510,16 +702,34 @@ async function processMessageWithPipeline(params: {
 
   const groupSystemPrompt = groupConfigResolved.entry?.systemPrompt?.trim() || undefined;
 
+  // Build a better conversation label for sessions/dashboard.
+  // - Prefer chatName when available
+  // - Fallback to chat:<chatId>
+  // NOTE: We intentionally do NOT try to expand members -> display names here yet.
+  const conversationLabel = isGroup
+    ? (chatName?.trim() ? chatName.trim() : `chat:${chatId}`)
+    : `user:${senderId}`;
+
+  // Force DM session isolation: use peer userId as the stable session key component.
+  // This avoids merging all DMs into the default `agent:main:main` session.
+  const dmSessionKey = !isGroup && dmPeerUserId
+    ? `${route.agentId}:ringcentral:dm:${dmPeerUserId}`
+    : route.sessionKey;
+
   const ctxPayload = core.channel.reply.finalizeInboundContext({
     Body: body,
     RawBody: rawBody,
     CommandBody: rawBody,
-    From: `ringcentral:${senderId}`,
-    To: `ringcentral:${chatId}`,
-    SessionKey: route.sessionKey,
+    // IMPORTANT:
+    // OpenClaw derives group metadata from ctx.From / ctx.To for group/channel chats.
+    From: isGroup ? `ringcentral:group:${chatId}` : `ringcentral:${senderId}`,
+    // IMPORTANT: use provider/group-prefixed To for group chats so OpenClaw can infer
+    // group delivery context and session type correctly.
+    To: isGroup ? `ringcentral:group:${chatId}` : `ringcentral:${chatId}`,
+    SessionKey: dmSessionKey,
     AccountId: route.accountId,
     ChatType: isGroup ? "channel" : "direct",
-    ConversationLabel: fromLabel,
+    ConversationLabel: conversationLabel,
     SenderId: senderId,
     WasMentioned: isGroup ? effectiveWasMentioned : undefined,
     CommandAuthorized: commandAuthorized,
@@ -530,11 +740,24 @@ async function processMessageWithPipeline(params: {
     MediaPath: mediaPath,
     MediaType: mediaType,
     MediaUrl: mediaPath,
-    GroupSpace: isGroup ? chatName ?? undefined : undefined,
+    GroupSpace: isGroup ? (chatName?.trim() ? chatName.trim() : undefined) : undefined,
+    // Some cores/providers prefer GroupSubject for label derivation.
+    // Set it to chatName to make label resolution more robust.
+    GroupSubject: isGroup ? (chatName?.trim() ? chatName.trim() : undefined) : undefined,
     GroupSystemPrompt: isGroup ? groupSystemPrompt : undefined,
     OriginatingChannel: "ringcentral",
-    OriginatingTo: `ringcentral:${chatId}`,
+    OriginatingTo: isGroup ? `ringcentral:group:${chatId}` : `ringcentral:${chatId}`,
+    OriginatingFrom: isGroup ? `ringcentral:group:${chatId}` : `ringcentral:${senderId}`,
   });
+
+  // DEBUG: log critical routing/meta fields to confirm which ctx values are actually being used.
+  logger.debug(
+    `[default] inbound-meta: isGroup=${isGroup} chatType=${chatType} chatId=${chatId} senderId=${senderId} chatName=${JSON.stringify(
+      chatName ?? null,
+    )} sessionKey=${route.sessionKey} ctx.From=${ctxPayload.From} ctx.To=${ctxPayload.To} ConversationLabel=${JSON.stringify(
+      conversationLabel,
+    )}`,
+  );
 
   void core.channel.session
     .recordSessionMetaFromInbound({
@@ -545,6 +768,46 @@ async function processMessageWithPipeline(params: {
     .catch((err) => {
       logger.error(`ringcentral: failed updating session meta: ${String(err)}`);
     });
+
+  // Backfill / repair session label for existing sessions.
+  // Some sessions may have been created earlier with fallback labels (e.g. `chat:<id>`)
+  // before we started passing ConversationLabel / GroupSpace.
+  try {
+    if (isGroup && chatName?.trim()) {
+      const repairedLabel = chatName.trim();
+      const fallbackLabel = `chat:${chatId}`;
+
+      // If we only have a fallback label, overwrite it with the real group name.
+      // NOTE: recordSessionMetaFromInbound merges meta; this second call ensures the
+      // dashboard/session list picks up the newer label even for pre-existing sessions.
+      // Treat a few common weak labels as eligible for repair.
+      // NOTE: core may append ` id:<chatId>` when it falls back to GroupSpace/From.
+      const weakLabelCandidates = new Set([
+        fallbackLabel,
+        `chat:${chatId} id:${chatId}`,
+        `ringcentral:group:${chatId}`,
+        `ringcentral:group:${chatId} id:${chatId}`,
+        String(chatId),
+      ]);
+
+      const currentLabel = (conversationLabel || "").trim();
+
+      if (!currentLabel || weakLabelCandidates.has(currentLabel)) {
+        void core.channel.session.recordSessionMetaFromInbound({
+          storePath,
+          sessionKey: (ctxPayload.SessionKey as string | undefined) ?? route.sessionKey,
+          ctx: {
+            ...ctxPayload,
+            ConversationLabel: repairedLabel,
+            GroupSubject: repairedLabel,
+            GroupSpace: repairedLabel,
+          },
+        });
+      }
+    }
+  } catch (err) {
+    logger.error(`ringcentral: failed repairing session label: ${String(err)}`);
+  }
 
   // Typing indicator disabled - respond directly without "thinking" message
 
@@ -754,6 +1017,15 @@ export async function startRingCentralMonitor(
       return;
     }
 
+    if (Date.now() < nextAllowedWsConnectAt) {
+      const waitMs = nextAllowedWsConnectAt - Date.now();
+      logger.warn(
+        `[${account.accountId}] WS connect is rate-limited locally; will retry in ${Math.ceil(waitMs / 1000)}s`,
+      );
+      scheduleReconnect();
+      return;
+    }
+
     try {
       // Get or create WS manager (singleton per account)
       const mgr = await getOrCreateWsManager(account, logger);
@@ -775,23 +1047,43 @@ export async function startRingCentralMonitor(
         const sdkVer = (await import("@ringcentral/sdk/package.json", { with: { type: "json" } } as any))?.default?.version;
         // @ts-ignore - dynamic import of package.json for version logging
         const subsVer = (await import("@ringcentral/subscriptions/package.json", { with: { type: "json" } } as any))?.default?.version;
-        // @ts-ignore - dynamic import of package.json for version logging
-        const rcwsVer = (await import("@rc-ex/ws/package.json", { with: { type: "json" } } as any))?.default?.version;
-        logger.debug(`[${account.accountId}] rc sdk versions: @ringcentral/sdk=${sdkVer} @ringcentral/subscriptions=${subsVer} @rc-ex/ws=${rcwsVer}`);
+        logger.debug(`[${account.accountId}] rc sdk versions: @ringcentral/sdk=${sdkVer} @ringcentral/subscriptions=${subsVer}`);
       } catch {
         // ignore
       }
 
-      // Track current user ID to filter out self messages
+      // Determine ownerId (the JWT user's extension id) for self-message filtering.
+      // Prefer local config (no network) to avoid rate limiting.
+      // Fallback to REST only when needed.
+      if (!ownerId) {
+        const allowFrom =
+          (account.config.dm?.allowFrom ?? account.config.allowFrom ?? []).map((v) => String(v));
+        const allowFromFirst = allowFrom[0]?.trim();
+
+        // If allowFrom[0] is configured, treat it as the current user id.
+        // (This is consistent with your setup where you put your own id in allowFrom.)
+        if (allowFromFirst) {
+          ownerId = allowFromFirst;
+          logger.debug(`[${account.accountId}] ownerId set from config allowFrom[0]: ${ownerId}`);
+        }
+      }
+
+      // Fallback: query current extension via REST (may be rate-limited)
       if (!ownerId) {
         try {
           const platform = mgr.sdk.platform();
           const response = await platform.get("/restapi/v1.0/account/~/extension/~");
           const userInfo = await response.json();
           ownerId = userInfo?.id?.toString();
-          logger.info(`[${account.accountId}] Authenticated as extension: ${ownerId}`);
+          logger.info(`[${account.accountId}] Authenticated as extension (REST): ${ownerId}`);
         } catch (err) {
-          logger.error(`[${account.accountId}] Failed to get current user: ${String(err)}`);
+          const msg = String(err);
+          logger.error(
+            `[${account.accountId}] Failed to get current user (REST, best-effort): ${msg}. ` +
+              `Continuing without ownerId; self-message filtering may be degraded temporarily.`,
+          );
+          // Backoff a bit to avoid hammering
+          nextAllowedWsConnectAt = Date.now() + 60_000;
         }
       }
 
@@ -813,12 +1105,18 @@ export async function startRingCentralMonitor(
       });
 
       // Subscribe to Team Messaging events and save WsSubscription for cleanup
-      // Register subscription via singleton wsExt (NOT via @ringcentral/subscriptions.register()).
-      // This avoids newWsExtension() being created per call.
+      // IMPORTANT:
+      // We use Team Messaging API (/team-messaging/v1/...) for fetching chats/persons.
+      // So our push subscription should also follow Team Messaging event filters.
+      // The older /glip/* filters can yield 404s depending on account/permissions and
+      // can break inbound processing.
       const eventFilters = [
         "/restapi/v1.0/glip/posts",
         "/restapi/v1.0/glip/groups",
       ];
+
+      // Register subscription via singleton wsExt (NOT via @ringcentral/subscriptions.register()).
+      // This avoids newWsExtension() being created per call.
       wsSubscription = await mgr.wsExt.subscribe(eventFilters, (event: unknown) => {
         subscription.emit(subscription.events.notification, event);
       });
@@ -851,7 +1149,7 @@ export async function startRingCentralMonitor(
         errStr.includes("429") || errStr.includes("rate") || errStr.includes("Rate");
 
       if (isRateLimited) {
-        const backoffMs = Number.isFinite(retryAfterMs) && retryAfterMs! > 0 ? retryAfterMs! : RATE_LIMIT_BACKOFF;
+        const backoffMs = Number.isFinite(retryAfterMs) && retryAfterMs! > 0 ? retryAfterMs! : 60000;
         nextAllowedWsConnectAt = Date.now() + backoffMs;
         logger.error(
           `[${account.accountId}] WS connect failed due to rate limit (wstoken). ` +
@@ -860,8 +1158,15 @@ export async function startRingCentralMonitor(
       }
 
       logger.error(
-        `[${account.accountId}] WS subscription failed. ` +
+        `[default] WS subscription failed (NO WS push will be received until fixed). ` +
+          `accountId=${account.accountId}. ` +
           `Reason=${e?.name ?? 'Error'}: ${e?.message ?? errStr}\n` +
+          `Where=createSubscription()->wsExt.subscribe()\n` +
+          `LikelyCause: underlying WebSocket object does not implement addEventListener (required by @rc-ex/ws), OR ws connect failed earlier and was swallowed.\n` +
+          `EventFilters=${JSON.stringify([
+            "/restapi/v1.0/glip/posts",
+            "/restapi/v1.0/glip/groups",
+          ])}\n` +
           `Stack:\n${msg}`,
       );
       scheduleReconnect(isRateLimited);
