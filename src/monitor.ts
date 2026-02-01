@@ -401,19 +401,12 @@ async function processMessageWithPipeline(params: {
     chatType = chatInfo?.type ?? "Group";
     chatName = chatInfo?.name ?? undefined;
 
-    const debugMode = Boolean(account.config.debugMode ?? (account.config as any).debug?.enabled);
-    if (debugMode) {
-      logger.debug(
-        `[${account.accountId}] debug inbound chatInfo: ` +
-          `id=${chatId} type=${chatInfo?.type ?? null} name=${JSON.stringify(chatInfo?.name ?? null)} ` +
-          `members=${JSON.stringify(chatInfo?.members ?? null)} description=${JSON.stringify(chatInfo?.description ?? null)}`,
-      );
-    } else {
-      // Keep minimal info log as before
-      logger.debug(
-        `[${account.accountId}] chatInfo: id=${chatId} type=${chatInfo?.type ?? null} name=${JSON.stringify(chatInfo?.name ?? null)} description=${JSON.stringify(chatInfo?.description ?? null)}`,
-      );
-    }
+    // OpenClaw logger respects configured log level - debug output controlled by openclaw config
+    logger.debug(
+      `[${account.accountId}] chatInfo: id=${chatId} type=${chatInfo?.type ?? null} ` +
+        `name=${JSON.stringify(chatInfo?.name ?? null)} members=${JSON.stringify(chatInfo?.members ?? null)} ` +
+        `description=${JSON.stringify(chatInfo?.description ?? null)}`,
+    );
   } catch (err) {
     // If we can't fetch chat info, assume it's a group.
     logger.error(`[${account.accountId}] getRingCentralChat failed: ${String(err)}`);
