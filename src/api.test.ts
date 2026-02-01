@@ -272,6 +272,33 @@ describe("Tasks API", () => {
   });
 });
 
+describe("Calendar Events API", () => {
+  it("listRingCentralEvents should be exported", async () => {
+    const { listRingCentralEvents } = await import("./api.js");
+    expect(typeof listRingCentralEvents).toBe("function");
+  });
+
+  it("createRingCentralEvent should be exported", async () => {
+    const { createRingCentralEvent } = await import("./api.js");
+    expect(typeof createRingCentralEvent).toBe("function");
+  });
+
+  it("getRingCentralEvent should be exported", async () => {
+    const { getRingCentralEvent } = await import("./api.js");
+    expect(typeof getRingCentralEvent).toBe("function");
+  });
+
+  it("updateRingCentralEvent should be exported", async () => {
+    const { updateRingCentralEvent } = await import("./api.js");
+    expect(typeof updateRingCentralEvent).toBe("function");
+  });
+
+  it("deleteRingCentralEvent should be exported", async () => {
+    const { deleteRingCentralEvent } = await import("./api.js");
+    expect(typeof deleteRingCentralEvent).toBe("function");
+  });
+});
+
 describe("probeRingCentral", () => {
   it("should be exported", async () => {
     const { probeRingCentral } = await import("./api.js");
