@@ -13,6 +13,7 @@ import type {
   RingCentralEvent,
   RingCentralNote,
   RingCentralWebhook,
+  RingCentralTeam,
 } from "./types.js";
 
 // Team Messaging API endpoints
@@ -890,6 +891,148 @@ export async function suspendRingCentralWebhook(params: {
   const { account, webhookId } = params;
   const platform = await getRingCentralPlatform(account);
   await platform.post(`${TM_API_BASE}/webhooks/${webhookId}/suspend`, {});
+}
+
+// Teams API
+export async function listRingCentralTeams(params: {
+  account: ResolvedRingCentralAccount;
+  limit?: number;
+  pageToken?: string;
+}): Promise<{ records: RingCentralTeam[]; navigation?: { nextPageToken?: string } }> {
+  const { account, limit, pageToken } = params;
+  const platform = await getRingCentralPlatform(account);
+
+  const queryParams: Record<string, string> = {};
+  if (limit) queryParams.recordCount = String(limit);
+  if (pageToken) queryParams.pageToken = pageToken;
+
+  const response = await platform.get(`${TM_API_BASE}/teams`, queryParams);
+  const result = (await response.json()) as {
+    records?: RingCentralTeam[];
+    navigation?: { prevPageToken?: string; nextPageToken?: string };
+  };
+  return {
+    records: result.records ?? [],
+    navigation: result.navigation,
+  };
+}
+
+export async function createRingCentralTeam(params: {
+  account: ResolvedRingCentralAccount;
+  name: string;
+  description?: string;
+  isPublic?: boolean;
+  members?: Array<{ id?: string; email?: string }>;
+}): Promise<RingCentralTeam> {
+  const { account, name, description, isPublic, members } = params;
+  const platform = await getRingCentralPlatform(account);
+
+  const body: Record<string, unknown> = { name };
+  if (description !== undefined) body.description = description;
+  if (isPublic !== undefined) body.public = isPublic;
+  if (members) body.members = members;
+
+  const response = await platform.post(`${TM_API_BASE}/teams`, body);
+  return (await response.json()) as RingCentralTeam;
+}
+
+export async function getRingCentralTeam(params: {
+  account: ResolvedRingCentralAccount;
+  teamId: string;
+}): Promise<RingCentralTeam | null> {
+  const { account, teamId } = params;
+  const platform = await getRingCentralPlatform(account);
+
+  try {
+    const response = await platform.get(`${TM_API_BASE}/teams/${teamId}`);
+    return (await response.json()) as RingCentralTeam;
+  } catch {
+    return null;
+  }
+}
+
+export async function updateRingCentralTeam(params: {
+  account: ResolvedRingCentralAccount;
+  teamId: string;
+  name?: string;
+  description?: string;
+  isPublic?: boolean;
+}): Promise<RingCentralTeam> {
+  const { account, teamId, name, description, isPublic } = params;
+  const platform = await getRingCentralPlatform(account);
+
+  const body: Record<string, unknown> = {};
+  if (name !== undefined) body.name = name;
+  if (description !== undefined) body.description = description;
+  if (isPublic !== undefined) body.public = isPublic;
+
+  const response = await platform.patch(`${TM_API_BASE}/teams/${teamId}`, body);
+  return (await response.json()) as RingCentralTeam;
+}
+
+export async function deleteRingCentralTeam(params: {
+  account: ResolvedRingCentralAccount;
+  teamId: string;
+}): Promise<void> {
+  const { account, teamId } = params;
+  const platform = await getRingCentralPlatform(account);
+  await platform.delete(`${TM_API_BASE}/teams/${teamId}`);
+}
+
+export async function joinRingCentralTeam(params: {
+  account: ResolvedRingCentralAccount;
+  teamId: string;
+}): Promise<void> {
+  const { account, teamId } = params;
+  const platform = await getRingCentralPlatform(account);
+  await platform.post(`${TM_API_BASE}/teams/${teamId}/join`, {});
+}
+
+export async function leaveRingCentralTeam(params: {
+  account: ResolvedRingCentralAccount;
+  teamId: string;
+}): Promise<void> {
+  const { account, teamId } = params;
+  const platform = await getRingCentralPlatform(account);
+  await platform.post(`${TM_API_BASE}/teams/${teamId}/leave`, {});
+}
+
+export async function addRingCentralTeamMembers(params: {
+  account: ResolvedRingCentralAccount;
+  teamId: string;
+  members: Array<{ id?: string; email?: string }>;
+}): Promise<void> {
+  const { account, teamId, members } = params;
+  const platform = await getRingCentralPlatform(account);
+  await platform.post(`${TM_API_BASE}/teams/${teamId}/add`, { members });
+}
+
+export async function removeRingCentralTeamMembers(params: {
+  account: ResolvedRingCentralAccount;
+  teamId: string;
+  members: Array<{ id: string }>;
+}): Promise<void> {
+  const { account, teamId, members } = params;
+  const platform = await getRingCentralPlatform(account);
+  await platform.post(`${TM_API_BASE}/teams/${teamId}/remove`, { members });
+}
+
+export async function archiveRingCentralTeam(params: {
+  account: ResolvedRingCentralAccount;
+  teamId: string;
+}): Promise<void> {
+  const { account, teamId } = params;
+  const platform = await getRingCentralPlatform(account);
+  await platform.post(`${TM_API_BASE}/teams/${teamId}/archive`, {});
+}
+
+export async function unarchiveRingCentralTeam(params: {
+  account: ResolvedRingCentralAccount;
+  teamId: string;
+}): Promise<void> {
+  const { account, teamId } = params;
+  const platform = await getRingCentralPlatform(account);
+  await platform.post(`${TM_API_BASE}/teams/${teamId}/unarchive`, {});
 }
 
 export async function probeRingCentral(

@@ -373,6 +373,63 @@ describe("Incoming Webhooks API", () => {
   });
 });
 
+describe("Teams API", () => {
+  it("listRingCentralTeams should be exported", async () => {
+    const { listRingCentralTeams } = await import("./api.js");
+    expect(typeof listRingCentralTeams).toBe("function");
+  });
+
+  it("createRingCentralTeam should be exported", async () => {
+    const { createRingCentralTeam } = await import("./api.js");
+    expect(typeof createRingCentralTeam).toBe("function");
+  });
+
+  it("getRingCentralTeam should be exported", async () => {
+    const { getRingCentralTeam } = await import("./api.js");
+    expect(typeof getRingCentralTeam).toBe("function");
+  });
+
+  it("updateRingCentralTeam should be exported", async () => {
+    const { updateRingCentralTeam } = await import("./api.js");
+    expect(typeof updateRingCentralTeam).toBe("function");
+  });
+
+  it("deleteRingCentralTeam should be exported", async () => {
+    const { deleteRingCentralTeam } = await import("./api.js");
+    expect(typeof deleteRingCentralTeam).toBe("function");
+  });
+
+  it("joinRingCentralTeam should be exported", async () => {
+    const { joinRingCentralTeam } = await import("./api.js");
+    expect(typeof joinRingCentralTeam).toBe("function");
+  });
+
+  it("leaveRingCentralTeam should be exported", async () => {
+    const { leaveRingCentralTeam } = await import("./api.js");
+    expect(typeof leaveRingCentralTeam).toBe("function");
+  });
+
+  it("addRingCentralTeamMembers should be exported", async () => {
+    const { addRingCentralTeamMembers } = await import("./api.js");
+    expect(typeof addRingCentralTeamMembers).toBe("function");
+  });
+
+  it("removeRingCentralTeamMembers should be exported", async () => {
+    const { removeRingCentralTeamMembers } = await import("./api.js");
+    expect(typeof removeRingCentralTeamMembers).toBe("function");
+  });
+
+  it("archiveRingCentralTeam should be exported", async () => {
+    const { archiveRingCentralTeam } = await import("./api.js");
+    expect(typeof archiveRingCentralTeam).toBe("function");
+  });
+
+  it("unarchiveRingCentralTeam should be exported", async () => {
+    const { unarchiveRingCentralTeam } = await import("./api.js");
+    expect(typeof unarchiveRingCentralTeam).toBe("function");
+  });
+});
+
 describe("probeRingCentral", () => {
   it("should be exported", async () => {
     const { probeRingCentral } = await import("./api.js");

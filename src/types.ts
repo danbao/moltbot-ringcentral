@@ -60,6 +60,19 @@ export type RingCentralWebhook = {
   lastModifiedTime?: string;
 };
 
+export type RingCentralTeam = {
+  id?: string;
+  name?: string;
+  description?: string;
+  type?: "Team";
+  status?: "Active" | "Archived";
+  isPublic?: boolean;
+  creatorId?: string;
+  members?: Array<{ id?: string; email?: string }>;
+  creationTime?: string;
+  lastModifiedTime?: string;
+};
+
 export type RingCentralEvent = {
   id?: string;
   chatId?: string;
