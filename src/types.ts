@@ -37,6 +37,31 @@ export type RingCentralConversation = {
   lastModifiedTime?: string;
 };
 
+export type RingCentralTask = {
+  id?: string;
+  chatId?: string;
+  creatorId?: string;
+  subject?: string;
+  assignees?: Array<{ id?: string }>;
+  completenessCondition?: "Simple" | "AllAssignees" | "Percentage";
+  completenessPercentage?: number;
+  startDate?: string;
+  dueDate?: string;
+  color?: "Black" | "Red" | "Orange" | "Yellow" | "Green" | "Blue" | "Purple" | "Magenta";
+  section?: string;
+  description?: string;
+  recurrence?: {
+    schedule?: "None" | "Daily" | "Weekdays" | "Weekly" | "Monthly" | "Yearly";
+    endingCondition?: "None" | "Count" | "Date";
+    endingAfter?: number;
+    endingOn?: string;
+  };
+  attachments?: RingCentralAttachment[];
+  status?: "Pending" | "InProgress" | "Completed";
+  creationTime?: string;
+  lastModifiedTime?: string;
+};
+
 export type RingCentralPost = {
   id?: string;
   groupId?: string;
