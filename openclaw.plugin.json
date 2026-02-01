@@ -1,0 +1,306 @@
+{
+  "id": "openclaw-ringcentral",
+  "name": "RingCentral",
+  "description": "OpenClaw RingCentral Team Messaging channel plugin",
+  "channels": ["ringcentral"],
+  "uiHints": {
+    "enabled": {
+      "label": "Enable RingCentral"
+    },
+    "name": {
+      "label": "Account Name",
+      "placeholder": "My RingCentral Bot"
+    },
+    "selfOnly": {
+      "label": "Self Only Mode",
+      "help": "When enabled, only respond to your own messages in Personal chat. Set to false to enable Team/Group chats."
+    },
+    "groupPolicy": {
+      "label": "Group Policy",
+      "help": "How to handle messages from Teams/Groups. Options: disabled (ignore all), allowlist (only configured teams), open (all teams with @mention)."
+    },
+    "groups": {
+      "label": "Allowed Teams",
+      "help": "Add Team IDs to enable them. Get Team ID from the RingCentral URL: app.ringcentral.com/messages/{TEAM_ID}",
+      "itemLabel": "Team ID",
+      "placeholder": "1234567890123"
+    },
+    "groups.*": {
+      "label": "Team Configuration"
+    },
+    "groups.*.enabled": {
+      "label": "Enabled",
+      "help": "Enable or disable this team"
+    },
+    "groups.*.requireMention": {
+      "label": "Require @Mention",
+      "help": "When enabled, the bot only responds when @mentioned in this team."
+    },
+    "groups.*.systemPrompt": {
+      "label": "System Prompt",
+      "help": "Custom instructions for the AI in this team. Appended to the default prompt.",
+      "placeholder": "You are a helpful assistant for the engineering team. Focus on technical questions."
+    },
+    "groups.*.users": {
+      "label": "Allowed Users",
+      "help": "List of user IDs who can trigger the bot. Leave empty to allow all team members.",
+      "placeholder": "3218766020"
+    },
+    "requireMention": {
+      "label": "Require @Mention (Global)",
+      "help": "Default setting for all teams. When enabled, the bot only responds when @mentioned."
+    },
+    "botExtensionId": {
+      "label": "Bot Extension ID",
+      "help": "Extension ID of the bot for @mention detection. Found in RingCentral admin portal.",
+      "placeholder": "123456789"
+    },
+    "credentials": {
+      "label": "API Credentials",
+      "advanced": true
+    },
+    "credentials.clientId": {
+      "label": "Client ID",
+      "placeholder": "Your RingCentral App Client ID",
+      "sensitive": true
+    },
+    "credentials.clientSecret": {
+      "label": "Client Secret",
+      "placeholder": "Your RingCentral App Client Secret",
+      "sensitive": true
+    },
+    "credentials.jwt": {
+      "label": "JWT Token",
+      "placeholder": "eyJraWQiOi...",
+      "sensitive": true
+    },
+    "credentials.server": {
+      "label": "API Server",
+      "placeholder": "https://platform.ringcentral.com",
+      "help": "Use https://platform.devtest.ringcentral.com for sandbox"
+    },
+    "dm": {
+      "label": "Direct Message Settings",
+      "advanced": true
+    },
+    "dm.policy": {
+      "label": "DM Policy",
+      "help": "How to handle direct messages: disabled, allowlist, pairing, or open"
+    },
+    "dm.allowFrom": {
+      "label": "DM Allowlist",
+      "help": "User IDs allowed to send DMs",
+      "placeholder": "987654321"
+    },
+    "mediaMaxMb": {
+      "label": "Max Media Size (MB)",
+      "placeholder": "20",
+      "advanced": true
+    },
+    "textChunkLimit": {
+      "label": "Text Chunk Limit",
+      "placeholder": "4000",
+      "advanced": true
+    },
+    "chunkMode": {
+      "label": "Chunk Mode",
+      "help": "How to split long messages: length (by character count) or newline (by line breaks)",
+      "advanced": true
+    },
+    "blockStreaming": {
+      "label": "Block Streaming",
+      "help": "Use block-based streaming for long responses",
+      "advanced": true
+    },
+    "replyToMode": {
+      "label": "Reply To Mode",
+      "help": "off: don't use threading, all: reply to all messages in thread",
+      "advanced": true
+    },
+    "useAdaptiveCards": {
+      "label": "Use Adaptive Cards",
+      "help": "Format messages with code blocks as Adaptive Cards for better rendering",
+      "advanced": true
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "description": "Enable the RingCentral channel"
+      },
+      "name": {
+        "type": "string",
+        "description": "Display name for this account"
+      },
+      "selfOnly": {
+        "type": "boolean",
+        "description": "Only respond to JWT user in Personal chat (default: true)"
+      },
+      "groupPolicy": {
+        "type": "string",
+        "enum": ["disabled", "allowlist", "open"],
+        "description": "Policy for handling group/team messages"
+      },
+      "groups": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable this team"
+            },
+            "requireMention": {
+              "type": "boolean",
+              "description": "Require @mention to trigger"
+            },
+            "systemPrompt": {
+              "type": "string",
+              "description": "Custom system prompt for this team"
+            },
+            "users": {
+              "type": "array",
+              "items": {
+                "type": ["string", "number"]
+              },
+              "description": "Allowed user IDs in this team"
+            }
+          }
+        },
+        "description": "Team/Group configurations keyed by Team ID"
+      },
+      "requireMention": {
+        "type": "boolean",
+        "description": "Require @mention in group chats (global default)"
+      },
+      "botExtensionId": {
+        "type": "string",
+        "description": "Extension ID of the bot for @mention detection"
+      },
+      "credentials": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "clientId": {
+            "type": "string"
+          },
+          "clientSecret": {
+            "type": "string"
+          },
+          "jwt": {
+            "type": "string"
+          },
+          "server": {
+            "type": "string"
+          }
+        }
+      },
+      "dm": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "policy": {
+            "type": "string",
+            "enum": ["disabled", "allowlist", "pairing", "open"]
+          },
+          "allowFrom": {
+            "type": "array",
+            "items": {
+              "type": ["string", "number"]
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "dmPolicy": {
+        "type": "string",
+        "enum": ["disabled", "allowlist", "pairing", "open"],
+        "description": "Deprecated: use dm.policy instead"
+      },
+      "allowFrom": {
+        "type": "array",
+        "items": {
+          "type": ["string", "number"]
+        },
+        "description": "Deprecated: use dm.allowFrom instead"
+      },
+      "groupAllowFrom": {
+        "type": "array",
+        "items": {
+          "type": ["string", "number"]
+        }
+      },
+      "mediaMaxMb": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "Maximum media file size in MB (default: 20)"
+      },
+      "textChunkLimit": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "Maximum characters per message chunk (default: 4000)"
+      },
+      "chunkMode": {
+        "type": "string",
+        "enum": ["length", "newline"],
+        "description": "How to split long messages"
+      },
+      "blockStreaming": {
+        "type": "boolean",
+        "description": "Use block-based streaming for responses"
+      },
+      "blockStreamingCoalesce": {
+        "type": "object",
+        "properties": {
+          "minChars": {
+            "type": "integer"
+          },
+          "idleMs": {
+            "type": "integer"
+          }
+        }
+      },
+      "replyToMode": {
+        "type": "string",
+        "enum": ["off", "all"],
+        "description": "Threading mode for replies"
+      },
+      "useAdaptiveCards": {
+        "type": "boolean",
+        "description": "Use Adaptive Cards for code block formatting"
+      },
+      "markdown": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "allowBots": {
+        "type": "boolean",
+        "description": "Allow messages from other bots"
+      },
+      "workspace": {
+        "type": "string",
+        "description": "Path to workspace for storing data"
+      },
+      "accounts": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object"
+        },
+        "description": "Multiple account configurations"
+      },
+      "defaultAccount": {
+        "type": "string",
+        "description": "Default account ID to use"
+      }
+    }
+  }
+}
