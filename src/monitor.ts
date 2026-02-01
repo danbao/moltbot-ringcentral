@@ -1,5 +1,5 @@
 import { Subscriptions } from "@ringcentral/subscriptions";
-import RcWsExtension, { Events as RcWsEvents } from "@rc-ex/ws";
+import RcWsExtension from "@rc-ex/ws";
 const WebSocketExtension = RcWsExtension.default ?? RcWsExtension;
 type WebSocketExtension = InstanceType<typeof WebSocketExtension>;
 import * as fs from "fs";
@@ -36,6 +36,10 @@ export type RingCentralLogger = {
   error: (message: string) => void;
 };
 
+/**
+ * @deprecated Use OpenClaw logger (getLogger(core)) instead.
+ * Kept for backward compatibility but no longer used internally.
+ */
 export type RingCentralRuntimeEnv = {
   log?: (message: string) => void;
   error?: (message: string) => void;
@@ -77,7 +81,7 @@ function buildWsManagerKey(account: ResolvedRingCentralAccount): string {
 
 async function getOrCreateWsManager(
   account: ResolvedRingCentralAccount,
-  runtime: RingCentralRuntimeEnv,
+  logger: RingCentralLogger,
 ): Promise<WsManager> {
   const key = buildWsManagerKey(account);
   const cached = wsManagers.get(account.accountId);
@@ -98,7 +102,7 @@ async function getOrCreateWsManager(
     throw new Error("Subscriptions.rc.installExtension is unavailable; cannot install WS extension");
   }
 
-  runtime.log?.(`[${account.accountId}] Installing @rc-ex/ws extension (singleton)...`);
+  logger.debug(`[${account.accountId}] Installing @rc-ex/ws extension (singleton)...`);
   await rc.installExtension(wsExt);
 
   const mgr: WsManager = { key, sdk, subscriptions, rc, wsExt };
@@ -109,7 +113,7 @@ async function getOrCreateWsManager(
 async function ensureWsConnected(
   mgr: WsManager,
   account: ResolvedRingCentralAccount,
-  runtime: RingCentralRuntimeEnv,
+  logger: RingCentralLogger,
 ): Promise<void> {
   // If already connected/open, nothing to do.
   const ws = mgr.wsExt.ws;
@@ -121,7 +125,7 @@ async function ensureWsConnected(
   }
 
   mgr.connectPromise = (async () => {
-    runtime.log?.(`[${account.accountId}] Forcing WS connect() (singleton)...`);
+    logger.debug(`[${account.accountId}] Forcing WS connect() (singleton)...`);
     await mgr.wsExt.connect(false);
     mgr.lastConnectAt = Date.now();
     if (!mgr.wsExt.ws) {
@@ -186,12 +190,12 @@ async function saveGroupChatMessage(params: {
   senderId: string;
   messageText: string;
   timestamp?: string;
-  runtime: RingCentralRuntimeEnv;
+  logger: RingCentralLogger;
 }): Promise<void> {
-  const { workspace, chatId, chatName, senderId, messageText, timestamp, runtime } = params;
+  const { workspace, chatId, chatName, senderId, messageText, timestamp, logger } = params;
 
   if (!workspace) {
-    runtime.log?.(`[ringcentral] Cannot save chat message: workspace not configured`);
+    logger.debug(`[ringcentral] Cannot save chat message: workspace not configured`);
     return;
   }
 
@@ -230,9 +234,9 @@ async function saveGroupChatMessage(params: {
     // Append to file
     await fs.promises.appendFile(filePath, content === entry ? entry : content, "utf-8");
 
-    runtime.log?.(`[ringcentral] Saved chat message to ${filePath}`);
+    logger.debug(`[ringcentral] Saved chat message to ${filePath}`);
   } catch (err) {
-    runtime.error?.(`[ringcentral] Failed to save chat message: ${String(err)}`);
+    logger.error(`[ringcentral] Failed to save chat message: ${String(err)}`);
   }
 }
 
@@ -399,20 +403,20 @@ async function processMessageWithPipeline(params: {
 
     const debugMode = Boolean(account.config.debugMode ?? (account.config as any).debug?.enabled);
     if (debugMode) {
-      runtime.log?.(
+      logger.debug(
         `[${account.accountId}] debug inbound chatInfo: ` +
           `id=${chatId} type=${chatInfo?.type ?? null} name=${JSON.stringify(chatInfo?.name ?? null)} ` +
           `members=${JSON.stringify(chatInfo?.members ?? null)} description=${JSON.stringify(chatInfo?.description ?? null)}`,
       );
     } else {
       // Keep minimal info log as before
-      runtime.log?.(
+      logger.debug(
         `[${account.accountId}] chatInfo: id=${chatId} type=${chatInfo?.type ?? null} name=${JSON.stringify(chatInfo?.name ?? null)} description=${JSON.stringify(chatInfo?.description ?? null)}`,
       );
     }
   } catch (err) {
     // If we can't fetch chat info, assume it's a group.
-    runtime.error?.(`[${account.accountId}] getRingCentralChat failed: ${String(err)}`);
+    logger.error(`[${account.accountId}] getRingCentralChat failed: ${String(err)}`);
   }
 
   // Personal, PersonalChat, Direct are all DM types
@@ -519,13 +523,13 @@ async function processMessageWithPipeline(params: {
           }),
         })
         .catch((err) => {
-          runtime.error?.(`ringcentral: meta-only session meta update failed: ${String(err)}`);
+          logger.error(`ringcentral: meta-only session meta update failed: ${String(err)}`);
         });
     }
   } catch (err) {
-    runtime.error?.(`ringcentral: meta-only session meta update crashed: ${String(err)}`);
+    logger.error(`ringcentral: meta-only session meta update crashed: ${String(err)}`);
   }
-  runtime.log?.(`[${account.accountId}] Chat type: ${chatType}, isGroup: ${isGroup}`);
+  logger.debug(`[${account.accountId}] Chat type: ${chatType}, isGroup: ${isGroup}`);
 
   // In selfOnly mode, only allow "Personal" chat (conversation with yourself)
   if (selfOnly && !isPersonalChat) {
@@ -545,22 +549,22 @@ async function processMessageWithPipeline(params: {
   let effectiveWasMentioned: boolean | undefined;
 
   if (isGroup) {
-    runtime.log?.(`[${account.accountId}] Entering group processing: chatId=${chatId}, groupPolicy=${groupPolicy}, groupEntry=${!!groupEntry}`);
+    logger.debug(`[${account.accountId}] Entering group processing: chatId=${chatId}, groupPolicy=${groupPolicy}, groupEntry=${!!groupEntry}`);
     if (groupPolicy === "disabled") {
-      runtime.log?.(`[${account.accountId}] DROP: groupPolicy=disabled`);
+      logger.debug(`[${account.accountId}] DROP: groupPolicy=disabled`);
       return;
     }
     const groupAllowlistConfigured = groupConfigResolved.allowlistConfigured;
     const groupAllowed =
       Boolean(groupEntry) || Boolean((account.config.groups ?? {})["*"]);
-    runtime.log?.(`[${account.accountId}] Allowlist check: configured=${groupAllowlistConfigured}, allowed=${groupAllowed}`);
+    logger.debug(`[${account.accountId}] Allowlist check: configured=${groupAllowlistConfigured}, allowed=${groupAllowed}`);
     if (groupPolicy === "allowlist") {
       if (!groupAllowlistConfigured) {
-        runtime.log?.(`[${account.accountId}] DROP: no allowlist configured`);
+        logger.debug(`[${account.accountId}] DROP: no allowlist configured`);
         return;
       }
       if (!groupAllowed) {
-        runtime.log?.(`[${account.accountId}] DROP: not in allowlist`);
+        logger.debug(`[${account.accountId}] DROP: not in allowlist`);
         return;
       }
     }
@@ -581,7 +585,7 @@ async function processMessageWithPipeline(params: {
     // This happens AFTER allowlist check but BEFORE mention check,
     // so we log all messages from monitored groups regardless of AI response
     const workspace = account.config.workspace ?? (config.agents as any)?.defaults?.workspace;
-    runtime.log?.(`[${account.accountId}] Group message logging: workspace=${workspace}, chatId=${chatId}, senderId=${senderId}`);
+    logger.debug(`[${account.accountId}] Group message logging: workspace=${workspace}, chatId=${chatId}, senderId=${senderId}`);
     if (workspace) {
       void saveGroupChatMessage({
         workspace,
@@ -590,10 +594,10 @@ async function processMessageWithPipeline(params: {
         senderId,
         messageText: rawBody,
         timestamp: eventBody.creationTime,
-        runtime,
+        logger,
       });
     } else {
-      runtime.log?.(`[${account.accountId}] Skipping chat log: no workspace configured`);
+      logger.debug(`[${account.accountId}] Skipping chat log: no workspace configured`);
     }
   }
 
@@ -753,8 +757,8 @@ async function processMessageWithPipeline(params: {
     OriginatingFrom: isGroup ? `ringcentral:group:${chatId}` : `ringcentral:${senderId}`,
   });
 
-  // DEBUG: log critical routing/meta fields to confirm which ctx values are actually being used at runtime.
-  runtime.log?.(
+  // DEBUG: log critical routing/meta fields to confirm which ctx values are actually being used.
+  logger.debug(
     `[default] inbound-meta: isGroup=${isGroup} chatType=${chatType} chatId=${chatId} senderId=${senderId} chatName=${JSON.stringify(
       chatName ?? null,
     )} sessionKey=${route.sessionKey} ctx.From=${ctxPayload.From} ctx.To=${ctxPayload.To} ConversationLabel=${JSON.stringify(
@@ -809,7 +813,7 @@ async function processMessageWithPipeline(params: {
       }
     }
   } catch (err) {
-    runtime.error?.(`ringcentral: failed repairing session label: ${String(err)}`);
+    logger.error(`ringcentral: failed repairing session label: ${String(err)}`);
   }
 
   // Typing indicator disabled - respond directly without "thinking" message
@@ -1022,7 +1026,7 @@ export async function startRingCentralMonitor(
 
     if (Date.now() < nextAllowedWsConnectAt) {
       const waitMs = nextAllowedWsConnectAt - Date.now();
-      runtime.log?.(
+      logger.warn(
         `[${account.accountId}] WS connect is rate-limited locally; will retry in ${Math.ceil(waitMs / 1000)}s`,
       );
       scheduleReconnect();
@@ -1031,10 +1035,10 @@ export async function startRingCentralMonitor(
 
     try {
       // Get or create WS manager (singleton per account)
-      const mgr = await getOrCreateWsManager(account, runtime);
+      const mgr = await getOrCreateWsManager(account, logger);
 
       // Force connect once per account (with in-flight de-dupe)
-      await ensureWsConnected(mgr, account, runtime);
+      await ensureWsConnected(mgr, account, logger);
 
       const subscription = mgr.subscriptions.createSubscription();
 
@@ -1050,7 +1054,7 @@ export async function startRingCentralMonitor(
         const sdkVer = (await import("@ringcentral/sdk/package.json", { with: { type: "json" } } as any))?.default?.version;
         // @ts-ignore - dynamic import of package.json for version logging
         const subsVer = (await import("@ringcentral/subscriptions/package.json", { with: { type: "json" } } as any))?.default?.version;
-        runtime.log?.(`[${account.accountId}] rc sdk versions: @ringcentral/sdk=${sdkVer} @ringcentral/subscriptions=${subsVer}`);
+        logger.debug(`[${account.accountId}] rc sdk versions: @ringcentral/sdk=${sdkVer} @ringcentral/subscriptions=${subsVer}`);
       } catch {
         // ignore
       }
@@ -1067,7 +1071,7 @@ export async function startRingCentralMonitor(
         // (This is consistent with your setup where you put your own id in allowFrom.)
         if (allowFromFirst) {
           ownerId = allowFromFirst;
-          runtime.log?.(`[${account.accountId}] ownerId set from config allowFrom[0]: ${ownerId}`);
+          logger.debug(`[${account.accountId}] ownerId set from config allowFrom[0]: ${ownerId}`);
         }
       }
 
@@ -1078,10 +1082,10 @@ export async function startRingCentralMonitor(
           const response = await platform.get("/restapi/v1.0/account/~/extension/~");
           const userInfo = await response.json();
           ownerId = userInfo?.id?.toString();
-          runtime.log?.(`[${account.accountId}] Authenticated as extension (REST): ${ownerId}`);
+          logger.info(`[${account.accountId}] Authenticated as extension (REST): ${ownerId}`);
         } catch (err) {
           const msg = String(err);
-          runtime.error?.(
+          logger.error(
             `[${account.accountId}] Failed to get current user (REST, best-effort): ${msg}. ` +
               `Continuing without ownerId; self-message filtering may be degraded temporarily.`,
           );
@@ -1135,7 +1139,7 @@ export async function startRingCentralMonitor(
       // Check for auth errors - don't retry on auth failures
       const isAuthError = errStr.includes("401") || errStr.includes("Unauthorized") || errStr.includes("invalid_grant");
       if (isAuthError) {
-        runtime.error?.(`[${account.accountId}] Authentication failed. Please check your credentials.`);
+        logger.error(`[${account.accountId}] Authentication failed. Please check your credentials.`);
         return;
       }
 
@@ -1154,14 +1158,13 @@ export async function startRingCentralMonitor(
       if (isRateLimited) {
         const backoffMs = Number.isFinite(retryAfterMs) && retryAfterMs! > 0 ? retryAfterMs! : 60000;
         nextAllowedWsConnectAt = Date.now() + backoffMs;
-        runtime.error?.(
+        logger.error(
           `[${account.accountId}] WS connect failed due to rate limit (wstoken). ` +
             `Backing off for ${Math.ceil(backoffMs / 1000)}s before retrying.`,
         );
       }
 
-      runtime.error?.(
-        // NOTE: use [default] prefix to match existing log style.
+      logger.error(
         `[default] WS subscription failed (NO WS push will be received until fixed). ` +
           `accountId=${account.accountId}. ` +
           `Reason=${e?.name ?? 'Error'}: ${e?.message ?? errStr}\n` +
