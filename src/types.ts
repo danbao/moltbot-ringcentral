@@ -9,6 +9,14 @@ export type RingCentralUser = {
   email?: string;
 };
 
+export type RingCentralCompany = {
+  id?: string;
+  name?: string;
+  domain?: string;
+  creationTime?: string;
+  lastModifiedTime?: string;
+};
+
 export type RingCentralChat = {
   id?: string;
   name?: string;
@@ -17,6 +25,94 @@ export type RingCentralChat = {
   status?: "Active" | "Archived";
   members?: string[];
   isPublic?: boolean;
+  creationTime?: string;
+  lastModifiedTime?: string;
+};
+
+export type RingCentralConversation = {
+  id?: string;
+  type?: "Direct" | "Personal" | "Group";
+  members?: Array<{ id?: string }>;
+  creationTime?: string;
+  lastModifiedTime?: string;
+};
+
+export type RingCentralNote = {
+  id?: string;
+  chatId?: string;
+  creatorId?: string;
+  title?: string;
+  body?: string;
+  status?: "Active" | "Draft";
+  lockedBy?: { id?: string };
+  type?: "Note";
+  creationTime?: string;
+  lastModifiedTime?: string;
+};
+
+export type RingCentralWebhook = {
+  id?: string;
+  creatorId?: string;
+  chatIds?: string[];
+  uri?: string;
+  status?: "Active" | "Suspended" | "Frozen";
+  creationTime?: string;
+  lastModifiedTime?: string;
+};
+
+export type RingCentralTeam = {
+  id?: string;
+  name?: string;
+  description?: string;
+  type?: "Team";
+  status?: "Active" | "Archived";
+  isPublic?: boolean;
+  creatorId?: string;
+  members?: Array<{ id?: string; email?: string }>;
+  creationTime?: string;
+  lastModifiedTime?: string;
+};
+
+export type RingCentralEvent = {
+  id?: string;
+  chatId?: string;
+  creatorId?: string;
+  title?: string;
+  startTime?: string;
+  endTime?: string;
+  allDay?: boolean;
+  recurrence?: "None" | "Day" | "Weekday" | "Week" | "Month" | "Year";
+  endingCondition?: "None" | "Count" | "Date";
+  endingAfter?: number;
+  endingOn?: string;
+  color?: "Black" | "Red" | "Orange" | "Yellow" | "Green" | "Blue" | "Purple" | "Magenta";
+  location?: string;
+  description?: string;
+  creationTime?: string;
+  lastModifiedTime?: string;
+};
+
+export type RingCentralTask = {
+  id?: string;
+  chatId?: string;
+  creatorId?: string;
+  subject?: string;
+  assignees?: Array<{ id?: string }>;
+  completenessCondition?: "Simple" | "AllAssignees" | "Percentage";
+  completenessPercentage?: number;
+  startDate?: string;
+  dueDate?: string;
+  color?: "Black" | "Red" | "Orange" | "Yellow" | "Green" | "Blue" | "Purple" | "Magenta";
+  section?: string;
+  description?: string;
+  recurrence?: {
+    schedule?: "None" | "Daily" | "Weekdays" | "Weekly" | "Monthly" | "Yearly";
+    endingCondition?: "None" | "Count" | "Date";
+    endingAfter?: number;
+    endingOn?: string;
+  };
+  attachments?: RingCentralAttachment[];
+  status?: "Pending" | "InProgress" | "Completed";
   creationTime?: string;
   lastModifiedTime?: string;
 };
@@ -166,6 +262,8 @@ export type RingCentralAccountConfig = {
   replyToMode?: "off" | "all";
   selfOnly?: boolean; // JWT mode: only accept messages from the JWT user in Personal chat (default: true)
   useAdaptiveCards?: boolean; // Use Adaptive Cards for messages with code blocks (default: false)
+  debugMode?: boolean; // Enable debug logging for inbound messages
+  workspace?: string; // Path to workspace for storing group chat messages
 };
 
 export type RingCentralConfig = RingCentralAccountConfig & {
