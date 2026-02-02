@@ -203,6 +203,10 @@ if [ "$USE_NPM" = true ]; then
 else
     echo "Installed: $PLUGIN_NAME@$CURRENT_VERSION (local)"
 fi
+
 echo ""
-echo "To load the new plugin, restart the gateway:"
-echo "  openclaw gateway restart"
+echo "Restarting gateway to load the new plugin..."
+openclaw gateway restart
+
+echo ""
+echo "=== Done ==="
