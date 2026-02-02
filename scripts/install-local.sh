@@ -67,17 +67,50 @@ if [ "$USE_NPM" = true ]; then
     fi
 else
     # Get current version from package.json
-    CURRENT_VERSION=$(node -p "require('./package.json').version")
-    TARBALL="${PLUGIN_NAME}-${CURRENT_VERSION}.tgz"
-    
-    echo "Source: local tarball"
-    echo "Version: $CURRENT_VERSION"
-    
-    # Check if tarball exists, if not pack it
-    if [ ! -f "$TARBALL" ]; then
-        echo "Tarball not found, packing..."
-        pnpm pack
+    ORIGINAL_VERSION=$(node -p "require('./package.json').version")
+
+    # Extract major version (first number before the first dot)
+    MAJOR_VERSION=$(echo "$ORIGINAL_VERSION" | cut -d'.' -f1)
+
+    # Get Git commit ID (short format, 7 characters)
+    if ! git rev-parse --git-dir > /dev/null 2>&1; then
+        echo "Error: Not a git repository. Cannot generate beta version."
+        exit 1
     fi
+    COMMIT_ID=$(git rev-parse --short=7 HEAD)
+
+    # Generate beta version: <major>.0.0-beta.<commitId>
+    BETA_VERSION="${MAJOR_VERSION}.0.0-beta.${COMMIT_ID}"
+    TARBALL="${PLUGIN_NAME}-${BETA_VERSION}.tgz"
+
+    echo "Source: local tarball"
+    echo "Original version: $ORIGINAL_VERSION"
+    echo "Beta version: $BETA_VERSION (commit: $COMMIT_ID)"
+
+    # Remove old tarballs to avoid confusion
+    rm -f ${PLUGIN_NAME}-*.tgz
+
+    # Temporarily update package.json version for packing
+    echo "Updating package.json version for packing..."
+    node -e "
+        const fs = require('fs');
+        const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+        pkg.version = '$BETA_VERSION';
+        fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n');
+    "
+
+    # Pack with the beta version
+    echo "Packing with beta version..."
+    pnpm pack
+
+    # Restore original version in package.json
+    echo "Restoring original package.json version..."
+    node -e "
+        const fs = require('fs');
+        const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+        pkg.version = '$ORIGINAL_VERSION';
+        fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n');
+    "
 
     if [ ! -f "$TARBALL" ]; then
         echo "Error: Failed to create tarball"
@@ -85,6 +118,7 @@ else
     fi
 
     INSTALL_SOURCE="$PROJECT_DIR/$TARBALL"
+    CURRENT_VERSION="$BETA_VERSION"
     echo "Using tarball: $TARBALL"
 fi
 
