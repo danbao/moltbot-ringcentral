@@ -226,11 +226,17 @@ export type RingCentralEventBody = {
 
 // Config types
 
+export type RingCentralGroupToolPolicy = {
+  allow?: string[];
+  deny?: string[];
+};
+
 export type RingCentralGroupConfig = {
   requireMention?: boolean;
   enabled?: boolean;
   users?: Array<string | number>;
   systemPrompt?: string;
+  tools?: RingCentralGroupToolPolicy;
 };
 
 export type RingCentralCredentials = {

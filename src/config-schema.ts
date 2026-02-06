@@ -8,12 +8,20 @@ import {
   requireOpenAllowFrom,
 } from "openclaw/plugin-sdk";
 
+const RingCentralGroupToolPolicySchema = z
+  .object({
+    allow: z.array(z.string()).optional(),
+    deny: z.array(z.string()).optional(),
+  })
+  .strict();
+
 const RingCentralGroupConfigSchema = z
   .object({
     requireMention: z.boolean().optional(),
     enabled: z.boolean().optional(),
     users: z.array(z.union([z.string(), z.number()])).optional(),
     systemPrompt: z.string().optional(),
+    tools: RingCentralGroupToolPolicySchema.optional(),
   })
   .strict();
 

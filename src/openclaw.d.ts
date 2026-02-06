@@ -236,8 +236,26 @@ declare module "openclaw/plugin-sdk" {
     collectWarnings: (opts: { account: TAccount; cfg: OpenClawConfig }) => string[];
   };
 
+  export type GroupToolPolicyConfig = {
+    allow?: string[];
+    deny?: string[];
+  };
+
+  export type GroupMentionParams = {
+    cfg: OpenClawConfig;
+    groupId?: string | null;
+    groupChannel?: string | null;
+    groupSpace?: string | null;
+    accountId?: string | null;
+    senderId?: string | null;
+    senderName?: string | null;
+    senderUsername?: string | null;
+    senderE164?: string | null;
+  };
+
   export type ChannelPluginGroups = {
     resolveRequireMention: (opts: { cfg: OpenClawConfig; accountId: string }) => boolean;
+    resolveToolPolicy?: (params: GroupMentionParams) => GroupToolPolicyConfig | undefined;
   };
 
   export type ChannelPluginMentions = {
@@ -553,4 +571,16 @@ declare module "openclaw/plugin-sdk" {
     placeholder?: string;
     updatePrompt?: boolean;
   }): Promise<{ policy: "open" | "allowlist" | "disabled"; entries: string[] } | null>;
+
+  // Group tool policy functions
+  export function resolveChannelGroupToolsPolicy(params: {
+    cfg: OpenClawConfig;
+    channel: string;
+    groupId?: string | null;
+    accountId?: string | null;
+    senderId?: string | null;
+    senderName?: string | null;
+    senderUsername?: string | null;
+    senderE164?: string | null;
+  }): GroupToolPolicyConfig | undefined;
 }

@@ -9,9 +9,11 @@ import {
   normalizeAccountId,
   PAIRING_APPROVED_MESSAGE,
   resolveChannelMediaMaxBytes,
+  resolveChannelGroupToolsPolicy,
   setAccountEnabledInConfigSection,
   type ChannelDock,
   type ChannelPlugin,
+  type GroupToolPolicyConfig,
   type OpenClawConfig,
 } from "openclaw/plugin-sdk";
 
@@ -217,6 +219,18 @@ export const ringcentralPlugin: ChannelPlugin<ResolvedRingCentralAccount> = {
     resolveRequireMention: ({ cfg, accountId }) => {
       const account = resolveRingCentralAccount({ cfg: cfg as OpenClawConfig, accountId });
       return account.config.requireMention ?? true;
+    },
+    resolveToolPolicy: (params): GroupToolPolicyConfig | undefined => {
+      return resolveChannelGroupToolsPolicy({
+        cfg: params.cfg as OpenClawConfig,
+        channel: "ringcentral",
+        groupId: params.groupId,
+        accountId: params.accountId,
+        senderId: params.senderId,
+        senderName: params.senderName,
+        senderUsername: params.senderUsername,
+        senderE164: params.senderE164,
+      });
     },
   },
   mentions: {
