@@ -217,6 +217,14 @@ export const ringcentralPlugin: ChannelPlugin<ResolvedRingCentralAccount> = {
       return account.config.requireMention ?? true;
     },
   },
+  mentions: {
+    stripPatterns: () => [
+      // RingCentral markdown mention pattern: ![:Person](123456)
+      "!\\[:Person\\]\\(\\d+\\)",
+      // Display format: @FirstName or @FirstName LastName
+      "@[A-Za-z]+(?:\\s+[A-Za-z]+)?",
+    ],
+  },
   threading: {
     resolveReplyToMode: ({ cfg }) =>
       (cfg.channels?.ringcentral as RingCentralConfig | undefined)?.replyToMode ?? "off",

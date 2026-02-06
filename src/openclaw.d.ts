@@ -240,6 +240,10 @@ declare module "openclaw/plugin-sdk" {
     resolveRequireMention: (opts: { cfg: OpenClawConfig; accountId: string }) => boolean;
   };
 
+  export type ChannelPluginMentions = {
+    stripPatterns: (opts?: { ctx?: Record<string, unknown> }) => string[];
+  };
+
   export type ChannelPluginThreading = {
     resolveReplyToMode: (opts: { cfg: OpenClawConfig }) => string;
   };
@@ -355,6 +359,7 @@ declare module "openclaw/plugin-sdk" {
     config: ChannelPluginConfig<TAccount>;
     security?: ChannelPluginSecurity<TAccount>;
     groups?: ChannelPluginGroups;
+    mentions?: ChannelPluginMentions;
     threading?: ChannelPluginThreading;
     messaging?: ChannelPluginMessaging;
     directory?: ChannelPluginDirectory<TAccount>;
