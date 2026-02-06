@@ -11,8 +11,12 @@ import {
   createRingCentralTask,
   completeRingCentralTask,
   updateRingCentralTask,
+  listRingCentralEvents,
+  createRingCentralEvent,
+  updateRingCentralEvent,
+  deleteRingCentralEvent,
 } from "./api.js";
-import type { RingCentralPost, RingCentralAttachment, RingCentralMention, RingCentralTask } from "./types.js";
+import type { RingCentralPost, RingCentralAttachment, RingCentralMention, RingCentralTask, RingCentralEvent } from "./types.js";
 import { normalizeRingCentralTarget } from "./targets.js";
 
 export type RingCentralActionClientOpts = {
@@ -314,4 +318,146 @@ export async function updateRingCentralTaskAction(
   });
 
   return { taskId: result.id };
+}
+
+// Event Actions
+
+export type RingCentralEventSummary = {
+  id?: string;
+  title?: string;
+  startTime?: string;
+  endTime?: string;
+  allDay?: boolean;
+  location?: string;
+  description?: string;
+  color?: string;
+  recurrence?: string;
+  creatorId?: string;
+};
+
+function toEventSummary(event: RingCentralEvent): RingCentralEventSummary {
+  return {
+    id: event.id,
+    title: event.title,
+    startTime: event.startTime,
+    endTime: event.endTime,
+    allDay: event.allDay,
+    location: event.location,
+    description: event.description,
+    color: event.color,
+    recurrence: event.recurrence,
+    creatorId: event.creatorId,
+  };
+}
+
+/**
+ * List events in a RingCentral chat.
+ */
+export async function listRingCentralEventsAction(
+  chatId: string,
+  opts: RingCentralActionClientOpts & {
+    limit?: number;
+  },
+): Promise<{ events: RingCentralEventSummary[]; hasMore: boolean }> {
+  const account = getAccount(opts);
+  const targetChatId = normalizeTarget(chatId);
+
+  const result = await listRingCentralEvents({
+    account,
+    chatId: targetChatId,
+    limit: opts.limit,
+  });
+
+  return {
+    events: result.records.map(toEventSummary),
+    hasMore: Boolean(result.navigation?.nextPageToken),
+  };
+}
+
+/**
+ * Create an event in a RingCentral chat.
+ */
+export async function createRingCentralEventAction(
+  chatId: string,
+  title: string,
+  startTime: string,
+  endTime: string,
+  opts: RingCentralActionClientOpts & {
+    allDay?: boolean;
+    location?: string;
+    description?: string;
+    color?: "Black" | "Red" | "Orange" | "Yellow" | "Green" | "Blue" | "Purple" | "Magenta";
+    recurrence?: "None" | "Day" | "Weekday" | "Week" | "Month" | "Year";
+  },
+): Promise<{ eventId?: string }> {
+  const account = getAccount(opts);
+  const targetChatId = normalizeTarget(chatId);
+
+  const result = await createRingCentralEvent({
+    account,
+    chatId: targetChatId,
+    title,
+    startTime,
+    endTime,
+    allDay: opts.allDay,
+    location: opts.location,
+    description: opts.description,
+    color: opts.color,
+    recurrence: opts.recurrence,
+  });
+
+  return { eventId: result.id };
+}
+
+/**
+ * Update an event in a RingCentral chat.
+ */
+export async function updateRingCentralEventAction(
+  chatId: string,
+  eventId: string,
+  opts: RingCentralActionClientOpts & {
+    title?: string;
+    startTime?: string;
+    endTime?: string;
+    allDay?: boolean;
+    location?: string;
+    description?: string;
+    color?: "Black" | "Red" | "Orange" | "Yellow" | "Green" | "Blue" | "Purple" | "Magenta";
+  },
+): Promise<{ eventId?: string }> {
+  const account = getAccount(opts);
+  const targetChatId = normalizeTarget(chatId);
+
+  const result = await updateRingCentralEvent({
+    account,
+    chatId: targetChatId,
+    eventId,
+    title: opts.title,
+    startTime: opts.startTime,
+    endTime: opts.endTime,
+    allDay: opts.allDay,
+    location: opts.location,
+    description: opts.description,
+    color: opts.color,
+  });
+
+  return { eventId: result.id };
+}
+
+/**
+ * Delete an event from a RingCentral chat.
+ */
+export async function deleteRingCentralEventAction(
+  chatId: string,
+  eventId: string,
+  opts: RingCentralActionClientOpts,
+): Promise<void> {
+  const account = getAccount(opts);
+  const targetChatId = normalizeTarget(chatId);
+
+  await deleteRingCentralEvent({
+    account,
+    chatId: targetChatId,
+    eventId,
+  });
 }
