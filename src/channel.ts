@@ -36,6 +36,7 @@ import {
 } from "./targets.js";
 import type { RingCentralConfig } from "./types.js";
 import { ringcentralMessageActions } from "./actions-adapter.js";
+import { ringcentralOnboarding } from "./onboarding.js";
 
 const formatAllowFromEntry = (entry: string) =>
   (entry ?? "")
@@ -100,6 +101,7 @@ export const ringcentralPlugin: ChannelPlugin<ResolvedRingCentralAccount> = {
     blurb: "RingCentral Team Messaging via REST API and WebSocket.",
     order: 56,
   },
+  onboarding: ringcentralOnboarding,
   pairing: {
     idLabel: "ringcentralUserId",
     normalizeAllowEntry: (entry) => formatAllowFromEntry(entry),

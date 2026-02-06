@@ -347,6 +347,7 @@ declare module "openclaw/plugin-sdk" {
   export type ChannelPlugin<TAccount = any> = {
     id: string;
     meta: ChannelPluginMeta;
+    onboarding?: ChannelOnboardingAdapter;
     pairing?: ChannelPluginPairing<TAccount>;
     capabilities: ChannelPluginCapabilities;
     streaming?: {
@@ -429,4 +430,127 @@ declare module "openclaw/plugin-sdk" {
   export const DmPolicySchema: z.ZodType<DmPolicy>;
   export const GroupPolicySchema: z.ZodType<GroupPolicy>;
   export const MarkdownConfigSchema: z.ZodType<MarkdownConfig>;
+
+  // Wizard Prompter Types
+  export type WizardSelectOption<T = string> = {
+    value: T;
+    label: string;
+    hint?: string;
+  };
+
+  export type WizardSelectParams<T = string> = {
+    message: string;
+    options: Array<WizardSelectOption<T>>;
+    initialValue?: T;
+  };
+
+  export type WizardTextParams = {
+    message: string;
+    initialValue?: string;
+    placeholder?: string;
+    validate?: (value: string) => string | undefined;
+  };
+
+  export type WizardConfirmParams = {
+    message: string;
+    initialValue?: boolean;
+  };
+
+  export type WizardProgress = {
+    update: (message: string) => void;
+    stop: (message?: string) => void;
+  };
+
+  export type WizardPrompter = {
+    intro: (title: string) => Promise<void>;
+    outro: (message: string) => Promise<void>;
+    note: (message: string, title?: string) => Promise<void>;
+    select: <T>(params: WizardSelectParams<T>) => Promise<T>;
+    text: (params: WizardTextParams) => Promise<string>;
+    confirm: (params: WizardConfirmParams) => Promise<boolean>;
+    progress: (label: string) => WizardProgress;
+  };
+
+  // Onboarding Types
+  export type ChannelId = string;
+
+  export type SetupChannelsOptions = {
+    allowDisable?: boolean;
+    accountIds?: Partial<Record<ChannelId, string>>;
+    forceAllowFromChannels?: ChannelId[];
+    skipDmPolicyPrompt?: boolean;
+    quickstartDefaults?: boolean;
+    [key: string]: unknown;
+  };
+
+  export type ChannelOnboardingStatus = {
+    channel: ChannelId;
+    configured: boolean;
+    statusLines: string[];
+    selectionHint?: string;
+    quickstartScore?: number;
+  };
+
+  export type ChannelOnboardingStatusContext = {
+    cfg: OpenClawConfig;
+    options?: SetupChannelsOptions;
+    accountOverrides: Partial<Record<ChannelId, string>>;
+    accountId?: string;
+  };
+
+  export type RuntimeEnv = {
+    log?: (msg: string) => void;
+    error?: (msg: string) => void;
+    [key: string]: unknown;
+  };
+
+  export type ChannelOnboardingConfigureContext = {
+    cfg: OpenClawConfig;
+    runtime: RuntimeEnv;
+    prompter: WizardPrompter;
+    options?: SetupChannelsOptions;
+    accountOverrides: Partial<Record<ChannelId, string>>;
+    shouldPromptAccountIds: boolean;
+    forceAllowFrom: boolean;
+  };
+
+  export type ChannelOnboardingResult = {
+    cfg: OpenClawConfig;
+    accountId?: string;
+  };
+
+  export type ChannelOnboardingDmPolicy = {
+    label: string;
+    channel: ChannelId;
+    policyKey: string;
+    allowFromKey: string;
+    getCurrent: (cfg: OpenClawConfig) => DmPolicy;
+    setPolicy: (cfg: OpenClawConfig, policy: DmPolicy) => OpenClawConfig;
+    promptAllowFrom?: (params: {
+      cfg: OpenClawConfig;
+      prompter: WizardPrompter;
+      accountId?: string;
+    }) => Promise<OpenClawConfig>;
+  };
+
+  export type ChannelOnboardingAdapter = {
+    channel: ChannelId;
+    getStatus: (ctx: ChannelOnboardingStatusContext) => Promise<ChannelOnboardingStatus>;
+    configure: (ctx: ChannelOnboardingConfigureContext) => Promise<ChannelOnboardingResult>;
+    dmPolicy?: ChannelOnboardingDmPolicy;
+    onAccountRecorded?: (accountId: string, options?: SetupChannelsOptions) => void;
+    disable?: (cfg: OpenClawConfig) => OpenClawConfig;
+  };
+
+  // Onboarding helper functions
+  export function addWildcardAllowFrom(allowFrom?: (string | number)[]): (string | number)[] | undefined;
+  export function formatDocsLink(path: string, label: string): string;
+  export function promptChannelAccessConfig(params: {
+    prompter: WizardPrompter;
+    label: string;
+    currentPolicy: string;
+    currentEntries: string[];
+    placeholder?: string;
+    updatePrompt?: boolean;
+  }): Promise<{ policy: "open" | "allowlist" | "disabled"; entries: string[] } | null>;
 }
