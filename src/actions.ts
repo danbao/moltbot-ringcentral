@@ -7,8 +7,12 @@ import {
   updateRingCentralMessage,
   deleteRingCentralMessage,
   getRingCentralChat,
+  listRingCentralTasks,
+  createRingCentralTask,
+  completeRingCentralTask,
+  updateRingCentralTask,
 } from "./api.js";
-import type { RingCentralPost, RingCentralAttachment, RingCentralMention } from "./types.js";
+import type { RingCentralPost, RingCentralAttachment, RingCentralMention, RingCentralTask } from "./types.js";
 import { normalizeRingCentralTarget } from "./targets.js";
 
 export type RingCentralActionClientOpts = {
@@ -181,4 +185,133 @@ export async function getRingCentralChatInfo(
     members: chat.members,
     description: chat.description,
   };
+}
+
+// Task Actions
+
+export type RingCentralTaskSummary = {
+  id?: string;
+  subject?: string;
+  description?: string;
+  status?: string;
+  dueDate?: string;
+  assignees?: Array<{ id?: string }>;
+  creatorId?: string;
+  creationTime?: string;
+};
+
+function toTaskSummary(task: RingCentralTask): RingCentralTaskSummary {
+  return {
+    id: task.id,
+    subject: task.subject,
+    description: task.description,
+    status: task.status,
+    dueDate: task.dueDate,
+    assignees: task.assignees,
+    creatorId: task.creatorId,
+    creationTime: task.creationTime,
+  };
+}
+
+/**
+ * List tasks in a RingCentral chat.
+ */
+export async function listRingCentralTasksAction(
+  chatId: string,
+  opts: RingCentralActionClientOpts & {
+    limit?: number;
+    status?: "Pending" | "InProgress" | "Completed";
+  },
+): Promise<{ tasks: RingCentralTaskSummary[]; hasMore: boolean }> {
+  const account = getAccount(opts);
+  const targetChatId = normalizeTarget(chatId);
+
+  const result = await listRingCentralTasks({
+    account,
+    chatId: targetChatId,
+    limit: opts.limit,
+    status: opts.status,
+  });
+
+  return {
+    tasks: result.records.map(toTaskSummary),
+    hasMore: Boolean(result.navigation?.nextPageToken),
+  };
+}
+
+/**
+ * Create a task in a RingCentral chat.
+ */
+export async function createRingCentralTaskAction(
+  chatId: string,
+  subject: string,
+  opts: RingCentralActionClientOpts & {
+    description?: string;
+    dueDate?: string;
+    assignees?: string[];
+  },
+): Promise<{ taskId?: string }> {
+  const account = getAccount(opts);
+  const targetChatId = normalizeTarget(chatId);
+
+  const result = await createRingCentralTask({
+    account,
+    chatId: targetChatId,
+    subject,
+    description: opts.description,
+    dueDate: opts.dueDate,
+    assignees: opts.assignees?.map((id) => ({ id })),
+  });
+
+  return { taskId: result.id };
+}
+
+/**
+ * Complete a task in a RingCentral chat.
+ */
+export async function completeRingCentralTaskAction(
+  chatId: string,
+  taskId: string,
+  opts: RingCentralActionClientOpts & {
+    complete?: boolean;
+  },
+): Promise<void> {
+  const account = getAccount(opts);
+  const targetChatId = normalizeTarget(chatId);
+
+  await completeRingCentralTask({
+    account,
+    chatId: targetChatId,
+    taskId,
+    status: opts.complete === false ? "Incomplete" : "Complete",
+  });
+}
+
+/**
+ * Update a task in a RingCentral chat.
+ */
+export async function updateRingCentralTaskAction(
+  chatId: string,
+  taskId: string,
+  opts: RingCentralActionClientOpts & {
+    subject?: string;
+    description?: string;
+    dueDate?: string;
+    assignees?: string[];
+  },
+): Promise<{ taskId?: string }> {
+  const account = getAccount(opts);
+  const targetChatId = normalizeTarget(chatId);
+
+  const result = await updateRingCentralTask({
+    account,
+    chatId: targetChatId,
+    taskId,
+    subject: opts.subject,
+    description: opts.description,
+    dueDate: opts.dueDate,
+    assignees: opts.assignees?.map((id) => ({ id })),
+  });
+
+  return { taskId: result.id };
 }

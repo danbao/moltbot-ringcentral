@@ -7,12 +7,25 @@ import {
   editRingCentralMessage,
   deleteRingCentralMessageAction,
   getRingCentralChatInfo,
+  listRingCentralTasksAction,
+  createRingCentralTaskAction,
+  completeRingCentralTaskAction,
+  updateRingCentralTaskAction,
 } from "./actions.js";
 import { normalizeRingCentralTarget } from "./targets.js";
 import type { RingCentralActionsConfig } from "./types.js";
 
 // Action names supported by RingCentral
-type RingCentralActionName = "send" | "read" | "edit" | "delete" | "channel-info";
+type RingCentralActionName =
+  | "send"
+  | "read"
+  | "edit"
+  | "delete"
+  | "channel-info"
+  | "list-tasks"
+  | "create-task"
+  | "complete-task"
+  | "update-task";
 
 type ChannelMessageActionContext = {
   channel: string;
@@ -125,6 +138,13 @@ export const ringcentralMessageActions: RingCentralMessageActionAdapter = {
       actions.add("channel-info");
     }
 
+    if (isActionEnabled("tasks")) {
+      actions.add("list-tasks");
+      actions.add("create-task");
+      actions.add("complete-task");
+      actions.add("update-task");
+    }
+
     return Array.from(actions);
   },
 
@@ -135,6 +155,10 @@ export const ringcentralMessageActions: RingCentralMessageActionAdapter = {
       "edit",
       "delete",
       "channel-info",
+      "list-tasks",
+      "create-task",
+      "complete-task",
+      "update-task",
     ]);
     return supportedActions.has(action);
   },
@@ -238,6 +262,107 @@ export const ringcentralMessageActions: RingCentralMessageActionAdapter = {
         return jsonResult({
           status: "ok",
           ...info,
+        });
+      }
+
+      // Task Actions
+      if (action === "list-tasks") {
+        const chatId = resolveChannelId(params);
+        const limit = readNumberParam(params, "limit", { integer: true });
+        const status = readStringParam(params, "status") as "Pending" | "InProgress" | "Completed" | undefined;
+
+        const result = await listRingCentralTasksAction(chatId, {
+          cfg,
+          accountId: accountId ?? undefined,
+          limit,
+          status,
+        });
+
+        return jsonResult({
+          status: "ok",
+          chatId,
+          tasks: result.tasks,
+          hasMore: result.hasMore,
+        });
+      }
+
+      if (action === "create-task") {
+        const chatId = resolveChannelId(params);
+        const subject = readStringParam(params, "subject", { required: true });
+        if (!subject) {
+          return errorResult("subject is required");
+        }
+        const description = readStringParam(params, "description");
+        const dueDate = readStringParam(params, "dueDate");
+        const assigneesRaw = params.assignees;
+        const assignees = Array.isArray(assigneesRaw)
+          ? assigneesRaw.map((a) => String(a))
+          : undefined;
+
+        const result = await createRingCentralTaskAction(chatId, subject, {
+          cfg,
+          accountId: accountId ?? undefined,
+          description,
+          dueDate,
+          assignees,
+        });
+
+        return jsonResult({
+          status: "ok",
+          taskId: result.taskId,
+          chatId,
+        });
+      }
+
+      if (action === "complete-task") {
+        const chatId = resolveChannelId(params);
+        const taskId = readStringParam(params, "taskId", { required: true });
+        if (!taskId) {
+          return errorResult("taskId is required");
+        }
+        const complete = params.complete !== false;
+
+        await completeRingCentralTaskAction(chatId, taskId, {
+          cfg,
+          accountId: accountId ?? undefined,
+          complete,
+        });
+
+        return jsonResult({
+          status: "ok",
+          taskId,
+          chatId,
+          completed: complete,
+        });
+      }
+
+      if (action === "update-task") {
+        const chatId = resolveChannelId(params);
+        const taskId = readStringParam(params, "taskId", { required: true });
+        if (!taskId) {
+          return errorResult("taskId is required");
+        }
+        const subject = readStringParam(params, "subject");
+        const description = readStringParam(params, "description");
+        const dueDate = readStringParam(params, "dueDate");
+        const assigneesRaw = params.assignees;
+        const assignees = Array.isArray(assigneesRaw)
+          ? assigneesRaw.map((a) => String(a))
+          : undefined;
+
+        const result = await updateRingCentralTaskAction(chatId, taskId, {
+          cfg,
+          accountId: accountId ?? undefined,
+          subject,
+          description,
+          dueDate,
+          assignees,
+        });
+
+        return jsonResult({
+          status: "ok",
+          taskId: result.taskId,
+          chatId,
         });
       }
 
