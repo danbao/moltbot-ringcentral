@@ -246,6 +246,11 @@ export const ringcentralPlugin: ChannelPlugin<ResolvedRingCentralAccount> = {
   threading: {
     resolveReplyToMode: ({ cfg }) =>
       (cfg.channels?.ringcentral as RingCentralConfig | undefined)?.replyToMode ?? "off",
+    buildToolContext: ({ context, hasRepliedRef }) => ({
+      currentChannelId: (context.To as string | undefined)?.trim() || undefined,
+      currentThreadTs: (context.ReplyToId as string | undefined) || undefined,
+      hasRepliedRef,
+    }),
   },
   messaging: {
     normalizeTarget: normalizeRingCentralTarget,
