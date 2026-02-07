@@ -29,6 +29,7 @@ import {
   uploadRingCentralAttachment,
   probeRingCentral,
   listRingCentralChats,
+  getRingCentralChat,
 } from "./api.js";
 import { getRingCentralRuntime } from "./runtime.js";
 import { startRingCentralMonitor } from "./monitor.js";
@@ -103,6 +104,7 @@ export const ringcentralPlugin: ChannelPlugin<ResolvedRingCentralAccount> = {
     docsLabel: "ringcentral",
     blurb: "RingCentral Team Messaging via REST API and WebSocket.",
     order: 56,
+    quickstartAllowFrom: true,
   },
   onboarding: ringcentralOnboarding,
   pairing: {
@@ -245,6 +247,11 @@ export const ringcentralPlugin: ChannelPlugin<ResolvedRingCentralAccount> = {
   threading: {
     resolveReplyToMode: ({ cfg }) =>
       (cfg.channels?.ringcentral as RingCentralConfig | undefined)?.replyToMode ?? "off",
+    buildToolContext: ({ context, hasRepliedRef }) => ({
+      currentChannelId: (context.To as string | undefined)?.trim() || undefined,
+      currentThreadTs: (context.ReplyToId as string | undefined) || undefined,
+      hasRepliedRef,
+    }),
   },
   messaging: {
     normalizeTarget: normalizeRingCentralTarget,
@@ -583,7 +590,48 @@ export const ringcentralPlugin: ChannelPlugin<ResolvedRingCentralAccount> = {
       lastProbeAt: snapshot.lastProbeAt ?? null,
     }),
     probeAccount: async ({ account }) => probeRingCentral(account),
-    buildAccountSnapshot: ({ account, runtime, probe }) => ({
+    auditAccount: async ({ account, cfg }) => {
+      const groups = account.config.groups ?? {};
+      const groupIds = Object.keys(groups).filter((k) => k !== "*");
+
+      if (!groupIds.length) return undefined;
+
+      const start = Date.now();
+      const results: Array<{
+        id: string;
+        ok: boolean;
+        name?: string;
+        type?: string;
+        error?: string;
+      }> = [];
+
+      for (const groupId of groupIds) {
+        try {
+          const chat = await getRingCentralChat({ account, chatId: groupId });
+          results.push({
+            id: groupId,
+            ok: Boolean(chat),
+            name: chat?.name,
+            type: chat?.type,
+            error: chat ? undefined : "Chat not found or no access",
+          });
+        } catch (err) {
+          results.push({
+            id: groupId,
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      return {
+        ok: results.every((r) => r.ok),
+        checkedGroups: results.length,
+        groups: results,
+        elapsedMs: Date.now() - start,
+      };
+    },
+    buildAccountSnapshot: ({ account, runtime, probe, audit }) => ({
       accountId: account.accountId,
       name: account.name,
       enabled: account.enabled,
@@ -599,6 +647,7 @@ export const ringcentralPlugin: ChannelPlugin<ResolvedRingCentralAccount> = {
       lastOutboundAt: runtime?.lastOutboundAt ?? null,
       dmPolicy: account.config.dm?.policy ?? "allowlist",
       probe,
+      audit,
     }),
   },
   gateway: {
@@ -626,6 +675,14 @@ export const ringcentralPlugin: ChannelPlugin<ResolvedRingCentralAccount> = {
           lastStopAt: Date.now(),
         });
       };
+    },
+    logoutAccount: async ({ cfg, accountId }) => {
+      // Note: RingCentral SDK instances are managed per-session via wsManagers cache
+      // in monitor.ts. The cache is keyed by account credentials, so changing
+      // credentials will automatically create new connections.
+      // This function primarily returns the config unchanged as credentials
+      // remain in the config file for manual removal if desired.
+      return cfg;
     },
   },
   actions: ringcentralMessageActions,

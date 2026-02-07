@@ -196,6 +196,7 @@ declare module "openclaw/plugin-sdk" {
     docsLabel?: string;
     blurb?: string;
     order?: number;
+    quickstartAllowFrom?: boolean;
   };
 
   export type ChannelPluginCapabilities = {
@@ -262,8 +263,15 @@ declare module "openclaw/plugin-sdk" {
     stripPatterns: (opts?: { ctx?: Record<string, unknown> }) => string[];
   };
 
+  export type ThreadingToolContext = {
+    currentChannelId?: string;
+    currentThreadTs?: string;
+    hasRepliedRef: { current: boolean };
+  };
+
   export type ChannelPluginThreading = {
     resolveReplyToMode: (opts: { cfg: OpenClawConfig }) => string;
+    buildToolContext?: (opts: { context: Record<string, unknown>; hasRepliedRef: { current: boolean } }) => ThreadingToolContext;
   };
 
   export type ChannelPluginMessaging = {
@@ -322,12 +330,26 @@ declare module "openclaw/plugin-sdk" {
     fix?: string;
   };
 
+  export type AccountAuditResult = {
+    ok: boolean;
+    checkedGroups: number;
+    groups: Array<{
+      id: string;
+      ok: boolean;
+      name?: string;
+      type?: string;
+      error?: string;
+    }>;
+    elapsedMs: number;
+  };
+
   export type ChannelPluginStatus<TAccount> = {
     defaultRuntime: Record<string, unknown>;
     collectStatusIssues: (accounts: Array<Record<string, unknown>>) => StatusIssue[];
     buildChannelSummary: (opts: { snapshot: Record<string, unknown> }) => Record<string, unknown>;
     probeAccount: (opts: { account: TAccount }) => Promise<{ ok: boolean; error?: string; elapsedMs: number }>;
-    buildAccountSnapshot: (opts: { account: TAccount; runtime?: Record<string, unknown>; probe?: Record<string, unknown> }) => Record<string, unknown>;
+    auditAccount?: (opts: { account: TAccount; cfg: OpenClawConfig; timeoutMs?: number; probe?: Record<string, unknown> }) => Promise<AccountAuditResult | undefined>;
+    buildAccountSnapshot: (opts: { account: TAccount; runtime?: Record<string, unknown>; probe?: Record<string, unknown>; audit?: AccountAuditResult }) => Record<string, unknown>;
   };
 
   export type GatewayContext<TAccount> = {
@@ -341,6 +363,7 @@ declare module "openclaw/plugin-sdk" {
 
   export type ChannelPluginGateway<TAccount> = {
     startAccount: (ctx: GatewayContext<TAccount>) => Promise<() => void>;
+    logoutAccount?: (opts: { cfg: OpenClawConfig; accountId: string }) => Promise<OpenClawConfig>;
   };
 
   // Message Action Types
