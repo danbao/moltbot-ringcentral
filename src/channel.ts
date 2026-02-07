@@ -32,7 +32,7 @@ import {
   getRingCentralChat,
 } from "./api.js";
 import { getRingCentralRuntime } from "./runtime.js";
-import { startRingCentralMonitor } from "./monitor.js";
+import { startRingCentralMonitor, clearRingCentralWsManager } from "./monitor.js";
 import {
   normalizeRingCentralTarget,
   isRingCentralChatTarget,
@@ -241,7 +241,9 @@ export const ringcentralPlugin: ChannelPlugin<ResolvedRingCentralAccount> = {
       // RingCentral markdown mention pattern: ![:Person](123456)
       "!\\[:Person\\]\\(\\d+\\)",
       // Display format: @FirstName or @FirstName LastName
-      "@[A-Za-z]+(?:\\s+[A-Za-z]+)?",
+      // Uses (?:^|[^\\w@.]) to avoid matching email addresses like user@example.com
+      // The pattern requires @ to be preceded by start of string, whitespace, or non-word char
+      "(?:^|[^\\w@.])@[A-Za-z]+(?:\\s+[A-Za-z]+)?",
     ],
   },
   threading: {
@@ -590,13 +592,14 @@ export const ringcentralPlugin: ChannelPlugin<ResolvedRingCentralAccount> = {
       lastProbeAt: snapshot.lastProbeAt ?? null,
     }),
     probeAccount: async ({ account }) => probeRingCentral(account),
-    auditAccount: async ({ account, cfg }) => {
+    auditAccount: async ({ account, cfg, timeoutMs }) => {
       const groups = account.config.groups ?? {};
       const groupIds = Object.keys(groups).filter((k) => k !== "*");
 
       if (!groupIds.length) return undefined;
 
       const start = Date.now();
+      const effectiveTimeout = timeoutMs ?? 30000; // Default 30 seconds
       const results: Array<{
         id: string;
         ok: boolean;
@@ -605,9 +608,29 @@ export const ringcentralPlugin: ChannelPlugin<ResolvedRingCentralAccount> = {
         error?: string;
       }> = [];
 
+      // Helper to check if we've exceeded the timeout
+      const isTimedOut = () => Date.now() - start > effectiveTimeout;
+
       for (const groupId of groupIds) {
+        // Check timeout before each API call
+        if (isTimedOut()) {
+          results.push({
+            id: groupId,
+            ok: false,
+            error: "Audit timed out",
+          });
+          continue;
+        }
+
         try {
-          const chat = await getRingCentralChat({ account, chatId: groupId });
+          // Wrap the API call with a timeout
+          const timeRemaining = effectiveTimeout - (Date.now() - start);
+          const chatPromise = getRingCentralChat({ account, chatId: groupId });
+          const timeoutPromise = new Promise<null>((_, reject) =>
+            setTimeout(() => reject(new Error("Request timed out")), Math.max(timeRemaining, 1000))
+          );
+
+          const chat = await Promise.race([chatPromise, timeoutPromise]);
           results.push({
             id: groupId,
             ok: Boolean(chat),
@@ -677,11 +700,16 @@ export const ringcentralPlugin: ChannelPlugin<ResolvedRingCentralAccount> = {
       };
     },
     logoutAccount: async ({ cfg, accountId }) => {
-      // Note: RingCentral SDK instances are managed per-session via wsManagers cache
-      // in monitor.ts. The cache is keyed by account credentials, so changing
-      // credentials will automatically create new connections.
-      // This function primarily returns the config unchanged as credentials
-      // remain in the config file for manual removal if desired.
+      // Clear cached WebSocket manager for this account to ensure
+      // fresh connections are created if the account is used again.
+      // This is important for:
+      // 1. Releasing resources when logging out
+      // 2. Ensuring credential changes take effect immediately
+      // 3. Avoiding stale connections after logout
+      clearRingCentralWsManager(accountId);
+
+      // Return config unchanged - credentials remain in config file
+      // for manual removal if desired
       return cfg;
     },
   },
