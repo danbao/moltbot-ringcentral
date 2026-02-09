@@ -18,6 +18,7 @@ import {
   listRingCentralNotes,
   createRingCentralNote,
   updateRingCentralNote,
+  publishRingCentralNote,
 } from "./api.js";
 import type { RingCentralPost, RingCentralAttachment, RingCentralMention, RingCentralTask, RingCentralEvent, RingCentralNote } from "./types.js";
 import { normalizeRingCentralTarget } from "./targets.js";
@@ -288,7 +289,6 @@ export async function completeRingCentralTaskAction(
 
   await completeRingCentralTask({
     account,
-    chatId: targetChatId,
     taskId,
     status: opts.complete === false ? "Incomplete" : "Complete",
   });
@@ -312,7 +312,6 @@ export async function updateRingCentralTaskAction(
 
   const result = await updateRingCentralTask({
     account,
-    chatId: targetChatId,
     taskId,
     subject: opts.subject,
     description: opts.description,
@@ -367,7 +366,7 @@ export async function listRingCentralEventsAction(
 
   const result = await listRingCentralEvents({
     account,
-    chatId: targetChatId,
+    groupId: targetChatId,
     limit: opts.limit,
   });
 
@@ -398,7 +397,7 @@ export async function createRingCentralEventAction(
 
   const result = await createRingCentralEvent({
     account,
-    chatId: targetChatId,
+    groupId: targetChatId,
     title,
     startTime,
     endTime,
@@ -433,7 +432,6 @@ export async function updateRingCentralEventAction(
 
   const result = await updateRingCentralEvent({
     account,
-    chatId: targetChatId,
     eventId,
     title: opts.title,
     startTime: opts.startTime,
@@ -460,7 +458,6 @@ export async function deleteRingCentralEventAction(
 
   await deleteRingCentralEvent({
     account,
-    chatId: targetChatId,
     eventId,
   });
 }
@@ -523,8 +520,9 @@ export async function createRingCentralNoteAction(
   title: string,
   opts: RingCentralActionClientOpts & {
     body?: string;
+    publish?: boolean;
   },
-): Promise<{ noteId?: string }> {
+): Promise<{ noteId?: string; status?: string }> {
   const account = getAccount(opts);
   const targetChatId = normalizeTarget(chatId);
 
@@ -535,7 +533,12 @@ export async function createRingCentralNoteAction(
     body: opts.body,
   });
 
-  return { noteId: result.id };
+  if (opts.publish && result.id) {
+    const published = await publishRingCentralNote({ account, noteId: result.id });
+    return { noteId: result.id, status: published.status ?? "Active" };
+  }
+
+  return { noteId: result.id, status: result.status ?? "Draft" };
 }
 
 /**
@@ -558,4 +561,44 @@ export async function updateRingCentralNoteAction(
   });
 
   return { noteId: result.id };
+}
+
+/**
+ * Publish a note (Draft -> Active) in RingCentral.
+ */
+export async function publishRingCentralNoteAction(
+  noteId: string,
+  opts: RingCentralActionClientOpts,
+): Promise<{ noteId?: string }> {
+  const account = getAccount(opts);
+
+  const result = await publishRingCentralNote({
+    account,
+    noteId,
+  });
+
+  return { noteId: result.id };
+}
+
+// Chat Search Action
+
+/**
+ * Search for chats by name (fuzzy match from cache).
+ */
+export function searchRingCentralChatAction(
+  query: string,
+): { results: Array<{ chatId: string; name: string; type: string }> } {
+  const { searchCachedChats } = require("./chat-cache.js") as typeof import("./chat-cache.js");
+  const matches = searchCachedChats(query);
+  return {
+    results: matches.map((c) => ({ chatId: c.id, name: c.name, type: c.type })),
+  };
+}
+
+/**
+ * Manually refresh the chat cache.
+ */
+export async function refreshRingCentralChatCacheAction(): Promise<{ count: number }> {
+  const { refreshChatCache } = require("./chat-cache.js") as typeof import("./chat-cache.js");
+  return refreshChatCache();
 }

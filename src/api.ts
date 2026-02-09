@@ -544,14 +544,13 @@ export async function createRingCentralTask(params: {
 
 export async function getRingCentralTask(params: {
   account: ResolvedRingCentralAccount;
-  chatId: string;
   taskId: string;
 }): Promise<RingCentralTask | null> {
-  const { account, chatId, taskId } = params;
+  const { account, taskId } = params;
   const platform = await getRingCentralPlatform(account);
 
   try {
-    const response = await platform.get(`${TM_API_BASE}/chats/${chatId}/tasks/${taskId}`);
+    const response = await platform.get(`${TM_API_BASE}/tasks/${taskId}`);
     return (await response.json()) as RingCentralTask;
   } catch {
     return null;
@@ -560,7 +559,6 @@ export async function getRingCentralTask(params: {
 
 export async function updateRingCentralTask(params: {
   account: ResolvedRingCentralAccount;
-  chatId: string;
   taskId: string;
   subject?: string;
   assignees?: Array<{ id: string }>;
@@ -571,56 +569,54 @@ export async function updateRingCentralTask(params: {
   section?: string;
   description?: string;
 }): Promise<RingCentralTask> {
-  const { account, chatId, taskId, ...taskData } = params;
+  const { account, taskId, ...taskData } = params;
   const platform = await getRingCentralPlatform(account);
 
-  const response = await platform.patch(`${TM_API_BASE}/chats/${chatId}/tasks/${taskId}`, taskData);
+  const response = await platform.patch(`${TM_API_BASE}/tasks/${taskId}`, taskData);
   return (await response.json()) as RingCentralTask;
 }
 
 export async function deleteRingCentralTask(params: {
   account: ResolvedRingCentralAccount;
-  chatId: string;
   taskId: string;
 }): Promise<void> {
-  const { account, chatId, taskId } = params;
+  const { account, taskId } = params;
   const platform = await getRingCentralPlatform(account);
-  await platform.delete(`${TM_API_BASE}/chats/${chatId}/tasks/${taskId}`);
+  await platform.delete(`${TM_API_BASE}/tasks/${taskId}`);
 }
 
 export async function completeRingCentralTask(params: {
   account: ResolvedRingCentralAccount;
-  chatId: string;
   taskId: string;
   status: "Incomplete" | "Complete";
   assignees?: Array<{ id: string }>;
   completenessPercentage?: number;
 }): Promise<void> {
-  const { account, chatId, taskId, status, assignees, completenessPercentage } = params;
+  const { account, taskId, status, assignees, completenessPercentage } = params;
   const platform = await getRingCentralPlatform(account);
 
   const body: Record<string, unknown> = { status };
   if (assignees) body.assignees = assignees;
   if (completenessPercentage !== undefined) body.completenessPercentage = completenessPercentage;
 
-  await platform.post(`${TM_API_BASE}/chats/${chatId}/tasks/${taskId}/complete`, body);
+  await platform.post(`${TM_API_BASE}/tasks/${taskId}/complete`, body);
 }
 
 // Calendar Events API
 export async function listRingCentralEvents(params: {
   account: ResolvedRingCentralAccount;
-  chatId: string;
+  groupId: string;
   limit?: number;
   pageToken?: string;
 }): Promise<{ records: RingCentralEvent[]; navigation?: { nextPageToken?: string } }> {
-  const { account, chatId, limit, pageToken } = params;
+  const { account, groupId, limit, pageToken } = params;
   const platform = await getRingCentralPlatform(account);
 
   const queryParams: Record<string, string> = {};
   if (limit) queryParams.recordCount = String(limit);
   if (pageToken) queryParams.pageToken = pageToken;
 
-  const response = await platform.get(`${TM_API_BASE}/chats/${chatId}/events`, queryParams);
+  const response = await platform.get(`${TM_API_BASE}/groups/${groupId}/events`, queryParams);
   const result = (await response.json()) as {
     records?: RingCentralEvent[];
     navigation?: { prevPageToken?: string; nextPageToken?: string };
@@ -633,7 +629,7 @@ export async function listRingCentralEvents(params: {
 
 export async function createRingCentralEvent(params: {
   account: ResolvedRingCentralAccount;
-  chatId: string;
+  groupId: string;
   title: string;
   startTime: string;
   endTime: string;
@@ -646,23 +642,22 @@ export async function createRingCentralEvent(params: {
   location?: string;
   description?: string;
 }): Promise<RingCentralEvent> {
-  const { account, chatId, ...eventData } = params;
+  const { account, groupId, ...eventData } = params;
   const platform = await getRingCentralPlatform(account);
 
-  const response = await platform.post(`${TM_API_BASE}/chats/${chatId}/events`, eventData);
+  const response = await platform.post(`${TM_API_BASE}/groups/${groupId}/events`, eventData);
   return (await response.json()) as RingCentralEvent;
 }
 
 export async function getRingCentralEvent(params: {
   account: ResolvedRingCentralAccount;
-  chatId: string;
   eventId: string;
 }): Promise<RingCentralEvent | null> {
-  const { account, chatId, eventId } = params;
+  const { account, eventId } = params;
   const platform = await getRingCentralPlatform(account);
 
   try {
-    const response = await platform.get(`${TM_API_BASE}/chats/${chatId}/events/${eventId}`);
+    const response = await platform.get(`${TM_API_BASE}/events/${eventId}`);
     return (await response.json()) as RingCentralEvent;
   } catch {
     return null;
@@ -671,7 +666,6 @@ export async function getRingCentralEvent(params: {
 
 export async function updateRingCentralEvent(params: {
   account: ResolvedRingCentralAccount;
-  chatId: string;
   eventId: string;
   title?: string;
   startTime?: string;
@@ -685,21 +679,20 @@ export async function updateRingCentralEvent(params: {
   location?: string;
   description?: string;
 }): Promise<RingCentralEvent> {
-  const { account, chatId, eventId, ...eventData } = params;
+  const { account, eventId, ...eventData } = params;
   const platform = await getRingCentralPlatform(account);
 
-  const response = await platform.put(`${TM_API_BASE}/chats/${chatId}/events/${eventId}`, eventData);
+  const response = await platform.put(`${TM_API_BASE}/events/${eventId}`, eventData);
   return (await response.json()) as RingCentralEvent;
 }
 
 export async function deleteRingCentralEvent(params: {
   account: ResolvedRingCentralAccount;
-  chatId: string;
   eventId: string;
 }): Promise<void> {
-  const { account, chatId, eventId } = params;
+  const { account, eventId } = params;
   const platform = await getRingCentralPlatform(account);
-  await platform.delete(`${TM_API_BASE}/chats/${chatId}/events/${eventId}`);
+  await platform.delete(`${TM_API_BASE}/events/${eventId}`);
 }
 
 // Notes API

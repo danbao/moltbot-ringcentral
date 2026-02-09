@@ -18,6 +18,9 @@ import {
   listRingCentralNotesAction,
   createRingCentralNoteAction,
   updateRingCentralNoteAction,
+  publishRingCentralNoteAction,
+  searchRingCentralChatAction,
+  refreshRingCentralChatCacheAction,
 } from "./actions.js";
 import { normalizeRingCentralTarget } from "./targets.js";
 import type { RingCentralActionsConfig } from "./types.js";
@@ -39,7 +42,10 @@ type RingCentralActionName =
   | "delete-event"
   | "list-notes"
   | "create-note"
-  | "update-note";
+  | "update-note"
+  | "publish-note"
+  | "search-chat"
+  | "refresh-chat-cache";
 
 type ChannelMessageActionContext = {
   channel: string;
@@ -129,7 +135,7 @@ export const ringcentralMessageActions: RingCentralMessageActionAdapter = {
     );
     if (configuredAccounts.length === 0) return [];
 
-    const actions = new Set<RingCentralActionName>(["send"]);
+    const actions = new Set<RingCentralActionName>(["send", "search-chat", "refresh-chat-cache"]);
 
     // Check if any account has messages actions enabled
     const isActionEnabled = (key: keyof RingCentralActionsConfig, defaultValue = true) => {
@@ -170,6 +176,7 @@ export const ringcentralMessageActions: RingCentralMessageActionAdapter = {
       actions.add("list-notes");
       actions.add("create-note");
       actions.add("update-note");
+      actions.add("publish-note");
     }
 
     return Array.from(actions);
@@ -193,6 +200,9 @@ export const ringcentralMessageActions: RingCentralMessageActionAdapter = {
       "list-notes",
       "create-note",
       "update-note",
+      "publish-note",
+      "search-chat",
+      "refresh-chat-cache",
     ]);
     return supportedActions.has(action);
   },
@@ -556,16 +566,19 @@ export const ringcentralMessageActions: RingCentralMessageActionAdapter = {
           return errorResult("title is required");
         }
         const body = readStringParam(params, "body");
+        const publish = params.publish === true || params.publish === "true";
 
         const result = await createRingCentralNoteAction(chatId, title, {
           cfg,
           accountId: accountId ?? undefined,
           body,
+          publish,
         });
 
         return jsonResult({
           status: "ok",
           noteId: result.noteId,
+          noteStatus: result.status,
           chatId,
         });
       }
@@ -588,6 +601,48 @@ export const ringcentralMessageActions: RingCentralMessageActionAdapter = {
         return jsonResult({
           status: "ok",
           noteId: result.noteId,
+        });
+      }
+
+      if (action === "publish-note") {
+        const noteId = readStringParam(params, "noteId", { required: true });
+        if (!noteId) {
+          return errorResult("noteId is required");
+        }
+
+        const result = await publishRingCentralNoteAction(noteId, {
+          cfg,
+          accountId: accountId ?? undefined,
+        });
+
+        return jsonResult({
+          status: "ok",
+          noteId: result.noteId,
+          published: true,
+        });
+      }
+
+      if (action === "search-chat") {
+        const query = readStringParam(params, "query", { required: true });
+        if (!query) {
+          return errorResult("query is required");
+        }
+
+        const result = searchRingCentralChatAction(query);
+
+        return jsonResult({
+          status: "ok",
+          ...result,
+        });
+      }
+
+      if (action === "refresh-chat-cache") {
+        const result = await refreshRingCentralChatCacheAction();
+
+        return jsonResult({
+          status: "ok",
+          refreshed: true,
+          count: result.count,
         });
       }
 
