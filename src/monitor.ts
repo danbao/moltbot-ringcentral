@@ -1322,6 +1322,7 @@ export async function startRingCentralMonitor(
       logger.warn(
         `[${account.accountId}] No inbound for ${Math.round((now - lastInboundAt) / 1000)}s (threshold=${INBOUND_STALE_THRESHOLD_MS / 1000}s). Forcing reconnect...`,
       );
+      lastInboundAt = 0; // Reset to prevent repeated triggers until next real inbound
       wsManagers.delete(account.accountId);
       scheduleReconnect();
       return;

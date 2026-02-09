@@ -649,7 +649,7 @@ export const ringcentralMessageActions: RingCentralMessageActionAdapter = {
         const result = findRingCentralDirectChatAction(memberId);
 
         return jsonResult({
-          status: "ok",
+          status: result.chatId ? "ok" : "not_found",
           ...result,
         });
       }
