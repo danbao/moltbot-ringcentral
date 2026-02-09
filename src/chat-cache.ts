@@ -33,6 +33,11 @@ const CACHE_FILE = "chat-cache.json";
 
 let memoryCache: CachedChat[] = [];
 let syncTimer: ReturnType<typeof setInterval> | null = null;
+let syncContext: {
+  account: ResolvedRingCentralAccount;
+  workspace: string | undefined;
+  logger: ChatCacheLogger;
+} | null = null;
 
 export function getCachedChats(): CachedChat[] {
   return memoryCache;
@@ -184,6 +189,15 @@ async function syncOnce(
   }
 }
 
+export async function refreshChatCache(): Promise<{ count: number }> {
+  if (!syncContext) {
+    return { count: memoryCache.length };
+  }
+  const { account, workspace, logger } = syncContext;
+  await syncOnce(account, workspace, logger);
+  return { count: memoryCache.length };
+}
+
 export function startChatCacheSync(params: {
   account: ResolvedRingCentralAccount;
   workspace: string | undefined;
@@ -191,6 +205,7 @@ export function startChatCacheSync(params: {
   abortSignal: AbortSignal;
 }): void {
   const { account, workspace, logger, abortSignal } = params;
+  syncContext = { account, workspace, logger };
 
   if (workspace) {
     memoryCache = readCacheFile(workspace, logger);
@@ -223,4 +238,5 @@ export function stopChatCacheSync(): void {
     clearInterval(syncTimer);
     syncTimer = null;
   }
+  syncContext = null;
 }

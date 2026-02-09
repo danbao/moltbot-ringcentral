@@ -588,3 +588,11 @@ export function searchRingCentralChatAction(
     results: matches.map((c) => ({ chatId: c.id, name: c.name, type: c.type })),
   };
 }
+
+/**
+ * Manually refresh the chat cache.
+ */
+export async function refreshRingCentralChatCacheAction(): Promise<{ count: number }> {
+  const { refreshChatCache } = require("./chat-cache.js") as typeof import("./chat-cache.js");
+  return refreshChatCache();
+}

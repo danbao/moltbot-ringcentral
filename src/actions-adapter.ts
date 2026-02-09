@@ -20,6 +20,7 @@ import {
   updateRingCentralNoteAction,
   publishRingCentralNoteAction,
   searchRingCentralChatAction,
+  refreshRingCentralChatCacheAction,
 } from "./actions.js";
 import { normalizeRingCentralTarget } from "./targets.js";
 import type { RingCentralActionsConfig } from "./types.js";
@@ -43,7 +44,8 @@ type RingCentralActionName =
   | "create-note"
   | "update-note"
   | "publish-note"
-  | "search-chat";
+  | "search-chat"
+  | "refresh-chat-cache";
 
 type ChannelMessageActionContext = {
   channel: string;
@@ -133,7 +135,7 @@ export const ringcentralMessageActions: RingCentralMessageActionAdapter = {
     );
     if (configuredAccounts.length === 0) return [];
 
-    const actions = new Set<RingCentralActionName>(["send", "search-chat"]);
+    const actions = new Set<RingCentralActionName>(["send", "search-chat", "refresh-chat-cache"]);
 
     // Check if any account has messages actions enabled
     const isActionEnabled = (key: keyof RingCentralActionsConfig, defaultValue = true) => {
@@ -200,6 +202,7 @@ export const ringcentralMessageActions: RingCentralMessageActionAdapter = {
       "update-note",
       "publish-note",
       "search-chat",
+      "refresh-chat-cache",
     ]);
     return supportedActions.has(action);
   },
@@ -627,6 +630,16 @@ export const ringcentralMessageActions: RingCentralMessageActionAdapter = {
         return jsonResult({
           status: "ok",
           ...result,
+        });
+      }
+
+      if (action === "refresh-chat-cache") {
+        const result = await refreshRingCentralChatCacheAction();
+
+        return jsonResult({
+          status: "ok",
+          refreshed: true,
+          count: result.count,
         });
       }
 
