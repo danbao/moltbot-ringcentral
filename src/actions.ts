@@ -520,8 +520,9 @@ export async function createRingCentralNoteAction(
   title: string,
   opts: RingCentralActionClientOpts & {
     body?: string;
+    publish?: boolean;
   },
-): Promise<{ noteId?: string }> {
+): Promise<{ noteId?: string; status?: string }> {
   const account = getAccount(opts);
   const targetChatId = normalizeTarget(chatId);
 
@@ -532,7 +533,12 @@ export async function createRingCentralNoteAction(
     body: opts.body,
   });
 
-  return { noteId: result.id };
+  if (opts.publish && result.id) {
+    const published = await publishRingCentralNote({ account, noteId: result.id });
+    return { noteId: result.id, status: published.status ?? "Active" };
+  }
+
+  return { noteId: result.id, status: result.status ?? "Draft" };
 }
 
 /**

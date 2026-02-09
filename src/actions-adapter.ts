@@ -566,16 +566,19 @@ export const ringcentralMessageActions: RingCentralMessageActionAdapter = {
           return errorResult("title is required");
         }
         const body = readStringParam(params, "body");
+        const publish = params.publish === true || params.publish === "true";
 
         const result = await createRingCentralNoteAction(chatId, title, {
           cfg,
           accountId: accountId ?? undefined,
           body,
+          publish,
         });
 
         return jsonResult({
           status: "ok",
           noteId: result.noteId,
+          noteStatus: result.status,
           chatId,
         });
       }
