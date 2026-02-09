@@ -29,7 +29,7 @@ type ChatCacheLogger = {
 
 const SYNC_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
 const CHAT_TYPES = ["Personal", "Direct", "Group", "Team", "Everyone"] as const;
-const CACHE_FILE = "chat-cache.json";
+const CACHE_FILE = "ringcentral-chat-cache.json";
 
 let memoryCache: CachedChat[] = [];
 let syncTimer: ReturnType<typeof setInterval> | null = null;
