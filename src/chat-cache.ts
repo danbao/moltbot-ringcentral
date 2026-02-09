@@ -140,10 +140,16 @@ async function fetchAllChats(
       for (const chat of chats) {
         if (!chat.id) continue;
 
+        // members can be string[] or {id:string}[] depending on chat type
+        const rawMembers = chat.members ?? [];
+        const memberIds = rawMembers.map((m: unknown) =>
+          typeof m === "object" && m !== null && "id" in m ? String((m as { id: unknown }).id) : String(m),
+        );
+
         let name = chat.name ?? "";
 
-        if (chatType === "Direct" && !name && chat.members) {
-          const peerId = chat.members.find((id) => id !== ownerId);
+        if (chatType === "Direct" && !name && memberIds.length > 0) {
+          const peerId = memberIds.find((id) => id !== ownerId);
           if (peerId) {
             name = await resolvePersonName(account, peerId, logger);
           }
@@ -155,9 +161,9 @@ async function fetchAllChats(
 
         result.push({
           id: chat.id,
-          name,
+          name: String(name || ""),
           type: chat.type ?? chatType,
-          members: chat.members,
+          members: memberIds,
         });
       }
     } catch (err) {
