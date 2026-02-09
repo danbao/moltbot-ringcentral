@@ -18,6 +18,7 @@ import {
   listRingCentralNotesAction,
   createRingCentralNoteAction,
   updateRingCentralNoteAction,
+  publishRingCentralNoteAction,
 } from "./actions.js";
 import { normalizeRingCentralTarget } from "./targets.js";
 import type { RingCentralActionsConfig } from "./types.js";
@@ -39,7 +40,8 @@ type RingCentralActionName =
   | "delete-event"
   | "list-notes"
   | "create-note"
-  | "update-note";
+  | "update-note"
+  | "publish-note";
 
 type ChannelMessageActionContext = {
   channel: string;
@@ -170,6 +172,7 @@ export const ringcentralMessageActions: RingCentralMessageActionAdapter = {
       actions.add("list-notes");
       actions.add("create-note");
       actions.add("update-note");
+      actions.add("publish-note");
     }
 
     return Array.from(actions);
@@ -193,6 +196,7 @@ export const ringcentralMessageActions: RingCentralMessageActionAdapter = {
       "list-notes",
       "create-note",
       "update-note",
+      "publish-note",
     ]);
     return supportedActions.has(action);
   },
@@ -588,6 +592,24 @@ export const ringcentralMessageActions: RingCentralMessageActionAdapter = {
         return jsonResult({
           status: "ok",
           noteId: result.noteId,
+        });
+      }
+
+      if (action === "publish-note") {
+        const noteId = readStringParam(params, "noteId", { required: true });
+        if (!noteId) {
+          return errorResult("noteId is required");
+        }
+
+        const result = await publishRingCentralNoteAction(noteId, {
+          cfg,
+          accountId: accountId ?? undefined,
+        });
+
+        return jsonResult({
+          status: "ok",
+          noteId: result.noteId,
+          published: true,
         });
       }
 

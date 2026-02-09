@@ -18,6 +18,7 @@ import {
   listRingCentralNotes,
   createRingCentralNote,
   updateRingCentralNote,
+  publishRingCentralNote,
 } from "./api.js";
 import type { RingCentralPost, RingCentralAttachment, RingCentralMention, RingCentralTask, RingCentralEvent, RingCentralNote } from "./types.js";
 import { normalizeRingCentralTarget } from "./targets.js";
@@ -551,6 +552,23 @@ export async function updateRingCentralNoteAction(
     noteId,
     title: opts.title,
     body: opts.body,
+  });
+
+  return { noteId: result.id };
+}
+
+/**
+ * Publish a note (Draft -> Active) in RingCentral.
+ */
+export async function publishRingCentralNoteAction(
+  noteId: string,
+  opts: RingCentralActionClientOpts,
+): Promise<{ noteId?: string }> {
+  const account = getAccount(opts);
+
+  const result = await publishRingCentralNote({
+    account,
+    noteId,
   });
 
   return { noteId: result.id };
