@@ -597,12 +597,17 @@ export function searchRingCentralChatAction(
 
 /**
  * Find Direct chat by member userId (e.g. senderId).
+ * Returns the exact DM between the bot (selfId) and the given memberId.
  */
-export function findRingCentralDirectChatAction(memberId: string): { chatId?: string; name?: string } {
+export function findRingCentralDirectChatAction(memberId: string): {
+  chatId?: string;
+  name?: string;
+  participants?: string[];
+} {
   const { findDirectChatByMember } = require("./chat-cache.js") as typeof import("./chat-cache.js");
   const chat = findDirectChatByMember(memberId);
   if (chat) {
-    return { chatId: chat.id, name: chat.name };
+    return { chatId: chat.id, name: chat.name, participants: chat.members };
   }
   return {};
 }
