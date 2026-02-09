@@ -596,6 +596,18 @@ export function searchRingCentralChatAction(
 }
 
 /**
+ * Find Direct chat by member userId (e.g. senderId).
+ */
+export function findRingCentralDirectChatAction(memberId: string): { chatId?: string; name?: string } {
+  const { findDirectChatByMember } = require("./chat-cache.js") as typeof import("./chat-cache.js");
+  const chat = findDirectChatByMember(memberId);
+  if (chat) {
+    return { chatId: chat.id, name: chat.name };
+  }
+  return {};
+}
+
+/**
  * Manually refresh the chat cache.
  */
 export async function refreshRingCentralChatCacheAction(): Promise<{ count: number }> {

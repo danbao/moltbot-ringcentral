@@ -47,6 +47,12 @@ export function searchCachedChats(query: string): CachedChat[] {
   return memoryCache.filter((c) => (c.name || "").toLowerCase().includes(q));
 }
 
+export function findDirectChatByMember(memberId: string): CachedChat | undefined {
+  return memoryCache.find(
+    (c) => c.type === "Direct" && c.members?.includes(memberId),
+  );
+}
+
 function resolveCachePath(workspace: string): string {
   return path.join(workspace, "memory", CACHE_FILE);
 }

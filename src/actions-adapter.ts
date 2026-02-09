@@ -20,6 +20,7 @@ import {
   updateRingCentralNoteAction,
   publishRingCentralNoteAction,
   searchRingCentralChatAction,
+  findRingCentralDirectChatAction,
   refreshRingCentralChatCacheAction,
 } from "./actions.js";
 import { normalizeRingCentralTarget } from "./targets.js";
@@ -45,6 +46,7 @@ type RingCentralActionName =
   | "update-note"
   | "publish-note"
   | "search-chat"
+  | "find-direct-chat"
   | "refresh-chat-cache";
 
 type ChannelMessageActionContext = {
@@ -135,7 +137,7 @@ export const ringcentralMessageActions: RingCentralMessageActionAdapter = {
     );
     if (configuredAccounts.length === 0) return [];
 
-    const actions = new Set<RingCentralActionName>(["send", "search-chat", "refresh-chat-cache"]);
+    const actions = new Set<RingCentralActionName>(["send", "search-chat", "find-direct-chat", "refresh-chat-cache"]);
 
     // Check if any account has messages actions enabled
     const isActionEnabled = (key: keyof RingCentralActionsConfig, defaultValue = true) => {
@@ -202,6 +204,7 @@ export const ringcentralMessageActions: RingCentralMessageActionAdapter = {
       "update-note",
       "publish-note",
       "search-chat",
+      "find-direct-chat",
       "refresh-chat-cache",
     ]);
     return supportedActions.has(action);
@@ -629,6 +632,20 @@ export const ringcentralMessageActions: RingCentralMessageActionAdapter = {
         }
 
         const result = searchRingCentralChatAction(query);
+
+        return jsonResult({
+          status: "ok",
+          ...result,
+        });
+      }
+
+      if (action === "find-direct-chat") {
+        const memberId = readStringParam(params, "memberId", { required: true });
+        if (!memberId) {
+          return errorResult("memberId is required");
+        }
+
+        const result = findRingCentralDirectChatAction(memberId);
 
         return jsonResult({
           status: "ok",
