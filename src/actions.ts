@@ -288,7 +288,6 @@ export async function completeRingCentralTaskAction(
 
   await completeRingCentralTask({
     account,
-    chatId: targetChatId,
     taskId,
     status: opts.complete === false ? "Incomplete" : "Complete",
   });
@@ -312,7 +311,6 @@ export async function updateRingCentralTaskAction(
 
   const result = await updateRingCentralTask({
     account,
-    chatId: targetChatId,
     taskId,
     subject: opts.subject,
     description: opts.description,
@@ -367,7 +365,7 @@ export async function listRingCentralEventsAction(
 
   const result = await listRingCentralEvents({
     account,
-    chatId: targetChatId,
+    groupId: targetChatId,
     limit: opts.limit,
   });
 
@@ -398,7 +396,7 @@ export async function createRingCentralEventAction(
 
   const result = await createRingCentralEvent({
     account,
-    chatId: targetChatId,
+    groupId: targetChatId,
     title,
     startTime,
     endTime,
@@ -433,7 +431,6 @@ export async function updateRingCentralEventAction(
 
   const result = await updateRingCentralEvent({
     account,
-    chatId: targetChatId,
     eventId,
     title: opts.title,
     startTime: opts.startTime,
@@ -460,7 +457,6 @@ export async function deleteRingCentralEventAction(
 
   await deleteRingCentralEvent({
     account,
-    chatId: targetChatId,
     eventId,
   });
 }
