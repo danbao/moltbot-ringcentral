@@ -181,6 +181,17 @@ export function detectLoopGuardMarker(text: string): LoopGuardReason | null {
   return null;
 }
 
+// ─── Attachment placeholder: silent discard for bare placeholder-only messages ───
+// Matches "media:attachment" or "<media:attachment>" after stripping whitespace and
+// optional blockquote prefix. Returns false if any other text is present.
+const ATTACHMENT_PLACEHOLDER_RE = /^(?:>\s*)?<?media:attachment>?\s*$/i;
+
+export function isPureAttachmentPlaceholder(text: string): boolean {
+  const normalized = text.trim();
+  if (!normalized) return false;
+  return ATTACHMENT_PLACEHOLDER_RE.test(normalized);
+}
+
 export type RingCentralMonitorOptions = {
   account: ResolvedRingCentralAccount;
   config: OpenClawConfig;
@@ -407,6 +418,12 @@ async function processMessageWithPipeline(params: {
   const loopGuardResult = detectLoopGuardMarker(rawBody);
   if (loopGuardResult) {
     logVerbose(core, `loop guard: filtered ${loopGuardResult} (msgId=${messageId} chatId=${chatId} sender=${senderId})`);
+    return;
+  }
+
+  // Check 3: Silent discard for pure attachment placeholder messages
+  if (isPureAttachmentPlaceholder(rawBody)) {
+    logVerbose(core, `silent: attachment-placeholder-only (msgId=${messageId} chatId=${chatId} sender=${senderId})`);
     return;
   }
 

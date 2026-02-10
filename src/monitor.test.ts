@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSenderAllowed, detectLoopGuardMarker } from "./monitor.js";
+import { isSenderAllowed, detectLoopGuardMarker, isPureAttachmentPlaceholder } from "./monitor.js";
 
 describe("isSenderAllowed", () => {
   it("returns true when allowFrom contains wildcard", () => {
@@ -149,5 +149,46 @@ describe("detectLoopGuardMarker", () => {
       expect(detectLoopGuardMarker("/status")).toBeNull();
       expect(detectLoopGuardMarker("请总结一下今天的内容")).toBeNull();
     });
+  });
+});
+
+describe("isPureAttachmentPlaceholder", () => {
+  it("matches media:attachment", () => {
+    expect(isPureAttachmentPlaceholder("media:attachment")).toBe(true);
+  });
+
+  it("matches <media:attachment>", () => {
+    expect(isPureAttachmentPlaceholder("<media:attachment>")).toBe(true);
+  });
+
+  it("matches with surrounding whitespace", () => {
+    expect(isPureAttachmentPlaceholder("  media:attachment  ")).toBe(true);
+    expect(isPureAttachmentPlaceholder("\n<media:attachment>\n")).toBe(true);
+  });
+
+  it("matches case-insensitive", () => {
+    expect(isPureAttachmentPlaceholder("Media:Attachment")).toBe(true);
+    expect(isPureAttachmentPlaceholder("MEDIA:ATTACHMENT")).toBe(true);
+  });
+
+  it("matches with blockquote prefix", () => {
+    expect(isPureAttachmentPlaceholder("> media:attachment")).toBe(true);
+    expect(isPureAttachmentPlaceholder("> <media:attachment>")).toBe(true);
+  });
+
+  it("does NOT match placeholder with extra text", () => {
+    expect(isPureAttachmentPlaceholder("请总结这个 media:attachment")).toBe(false);
+    expect(isPureAttachmentPlaceholder("media:attachment please summarize")).toBe(false);
+  });
+
+  it("does NOT match normal messages", () => {
+    expect(isPureAttachmentPlaceholder("hello world")).toBe(false);
+    expect(isPureAttachmentPlaceholder("/status")).toBe(false);
+    expect(isPureAttachmentPlaceholder("测试")).toBe(false);
+  });
+
+  it("returns false for empty string", () => {
+    expect(isPureAttachmentPlaceholder("")).toBe(false);
+    expect(isPureAttachmentPlaceholder("   ")).toBe(false);
   });
 });
