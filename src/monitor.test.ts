@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSenderAllowed } from "./monitor.js";
+import { isSenderAllowed, detectLoopGuardMarker } from "./monitor.js";
 
 describe("isSenderAllowed", () => {
   it("returns true when allowFrom contains wildcard", () => {
@@ -43,5 +43,111 @@ describe("isSenderAllowed", () => {
 
   it("ignores empty entries in allowFrom", () => {
     expect(isSenderAllowed("12345", ["", "12345", "  "])).toBe(true);
+  });
+});
+
+describe("detectLoopGuardMarker", () => {
+  describe("thinking_marker", () => {
+    it("matches thinking with emoji prefix", () => {
+      expect(detectLoopGuardMarker("> 🦞 Moss is thinking...")).toBe("thinking_marker");
+      expect(detectLoopGuardMarker("> 🦞 OpenClaw is thinking...")).toBe("thinking_marker");
+    });
+
+    it("matches thinking without emoji", () => {
+      expect(detectLoopGuardMarker("> Assistant is thinking...")).toBe("thinking_marker");
+    });
+
+    it("matches custom bot names", () => {
+      expect(detectLoopGuardMarker("> 🦞 My Custom Bot is thinking...")).toBe("thinking_marker");
+    });
+
+    it("matches Chinese thinking variant", () => {
+      expect(detectLoopGuardMarker("> 🦞 Moss 正在思考...")).toBe("thinking_marker");
+    });
+
+    it("does not match without quote prefix", () => {
+      expect(detectLoopGuardMarker("is thinking...")).toBeNull();
+      expect(detectLoopGuardMarker("Moss is thinking...")).toBeNull();
+    });
+
+    it("does not match normal text about thinking", () => {
+      expect(detectLoopGuardMarker("今天在想性能问题")).toBeNull();
+      expect(detectLoopGuardMarker("I was thinking about this")).toBeNull();
+    });
+  });
+
+  describe("answer_wrapper", () => {
+    it("matches answer delimiter", () => {
+      expect(detectLoopGuardMarker("> --------answer--------")).toBe("answer_wrapper");
+    });
+
+    it("matches end delimiter", () => {
+      expect(detectLoopGuardMarker("> ---------end----------")).toBe("answer_wrapper");
+    });
+
+    it("matches with variable dash count", () => {
+      expect(detectLoopGuardMarker("> ---answer---")).toBe("answer_wrapper");
+      expect(detectLoopGuardMarker("> ---end---")).toBe("answer_wrapper");
+    });
+
+    it("matches full wrapped message", () => {
+      expect(detectLoopGuardMarker("> --------answer--------\nsome content\n> ---------end----------")).toBe("answer_wrapper");
+    });
+
+    it("does not match normal text with answer/end", () => {
+      expect(detectLoopGuardMarker("the answer is 42")).toBeNull();
+      expect(detectLoopGuardMarker("this is the end")).toBeNull();
+    });
+  });
+
+  describe("queued_busy", () => {
+    it("matches queued messages while agent was busy", () => {
+      expect(detectLoopGuardMarker("Queued messages while agent was busy")).toBe("queued_busy");
+    });
+
+    it("matches case-insensitive", () => {
+      expect(detectLoopGuardMarker("queued messages while agent was busy")).toBe("queued_busy");
+      expect(detectLoopGuardMarker("QUEUED MESSAGES WHILE AGENT WAS BUSY")).toBe("queued_busy");
+    });
+
+    it("matches when embedded in longer text", () => {
+      expect(detectLoopGuardMarker("System: Queued messages while agent was busy\nsome other text")).toBe("queued_busy");
+    });
+  });
+
+  describe("queued_number", () => {
+    it("matches Queued #N", () => {
+      expect(detectLoopGuardMarker("Queued #1")).toBe("queued_number");
+      expect(detectLoopGuardMarker("Queued #23")).toBe("queued_number");
+    });
+
+    it("matches case-insensitive", () => {
+      expect(detectLoopGuardMarker("queued #5")).toBe("queued_number");
+    });
+
+    it("does not match queued without number", () => {
+      expect(detectLoopGuardMarker("Queued something")).toBeNull();
+    });
+  });
+
+  describe("should NOT filter", () => {
+    it("does not filter media:attachment", () => {
+      expect(detectLoopGuardMarker("media:attachment")).toBeNull();
+      expect(detectLoopGuardMarker("<media:attachment>")).toBeNull();
+    });
+
+    it("does not filter System: prefix alone", () => {
+      expect(detectLoopGuardMarker("System: hello")).toBeNull();
+    });
+
+    it("does not filter RingCentral user: prefix alone", () => {
+      expect(detectLoopGuardMarker("[RingCentral user: John] hello")).toBeNull();
+    });
+
+    it("returns null for normal messages", () => {
+      expect(detectLoopGuardMarker("hello world")).toBeNull();
+      expect(detectLoopGuardMarker("/status")).toBeNull();
+      expect(detectLoopGuardMarker("请总结一下今天的内容")).toBeNull();
+    });
   });
 });

@@ -155,6 +155,32 @@ function isOwnSentMessage(messageId: string): boolean {
   return recentlySentMessageIds.has(messageId);
 }
 
+// ─── Loop guard: high-confidence structural detection of bot-generated markers ───
+// Returns the marker type if matched, or null if the message is normal user content.
+// Only filters text with unambiguous bot/system structural features.
+// Does NOT filter: media:attachment, System: prefix, RingCentral user: prefix alone.
+
+// Matches: "> 🦞 Xxx is thinking...", "> Xxx is thinking...", "> Xxx 正在思考..."
+const THINKING_MARKER_RE = /^>\s*.+\s+is\s+thinking\.\.\.\s*$|^>\s*.+\s+正在思考[.…]*\s*$/m;
+// Matches: "> --------answer--------" or "> ---------end----------" (variable dash count)
+const ANSWER_WRAPPER_RE = /^>\s*-{3,}\s*answer\s*-{3,}\s*$/m;
+const END_WRAPPER_RE = /^>\s*-{3,}\s*end\s*-{3,}\s*$/m;
+// Matches: "Queued messages while agent was busy" (case-insensitive)
+const QUEUED_BUSY_RE = /queued messages while agent was busy/i;
+// Matches: "Queued #1", "Queued #23" etc.
+const QUEUED_NUMBER_RE = /^queued\s+#\d+$/im;
+
+export type LoopGuardReason = "thinking_marker" | "answer_wrapper" | "queued_busy" | "queued_number";
+
+export function detectLoopGuardMarker(text: string): LoopGuardReason | null {
+  if (THINKING_MARKER_RE.test(text)) return "thinking_marker";
+  if (ANSWER_WRAPPER_RE.test(text)) return "answer_wrapper";
+  if (END_WRAPPER_RE.test(text)) return "answer_wrapper";
+  if (QUEUED_BUSY_RE.test(text)) return "queued_busy";
+  if (QUEUED_NUMBER_RE.test(text)) return "queued_number";
+  return null;
+}
+
 export type RingCentralMonitorOptions = {
   account: ResolvedRingCentralAccount;
   config: OpenClawConfig;
@@ -376,9 +402,11 @@ async function processMessageWithPipeline(params: {
     return;
   }
 
-  // Check 2: Skip typing/thinking indicators (pattern-based)
-  if (rawBody.includes("thinking...") || rawBody.includes("typing...")) {
-    logVerbose(core, "skip typing indicator message");
+  // Check 2: Structural loop guard — filter out bot-generated markers
+  // These patterns are name-independent and match structural features only.
+  const loopGuardResult = detectLoopGuardMarker(rawBody);
+  if (loopGuardResult) {
+    logVerbose(core, `loop guard: filtered ${loopGuardResult} (msgId=${messageId} chatId=${chatId} sender=${senderId})`);
     return;
   }
 
