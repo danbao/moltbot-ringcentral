@@ -820,7 +820,24 @@ async function processMessageWithPipeline(params: {
     logger.error(`ringcentral: failed repairing session label: ${String(err)}`);
   }
 
-  // Typing indicator disabled - respond directly without "thinking" message
+  // Send "thinking" indicator before dispatching reply (follows Google Chat pattern)
+  const botName = resolveBotDisplayName({
+    accountName: account.config.name,
+    agentId: route.agentId,
+    config,
+  });
+  let typingPostId: string | undefined;
+  try {
+    const thinkingResult = await sendRingCentralMessage({
+      account,
+      chatId,
+      text: `🦞 ${botName} is thinking...`,
+    });
+    typingPostId = thinkingResult?.postId;
+    if (typingPostId) trackSentMessageId(typingPostId);
+  } catch (err) {
+    logger.debug(`[${account.accountId}] Failed to send thinking indicator: ${String(err)}`);
+  }
 
   await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
     ctx: ctxPayload,
@@ -834,8 +851,10 @@ async function processMessageWithPipeline(params: {
           core,
           config,
           statusSink,
-          typingPostId: undefined,
+          typingPostId,
         });
+        // Only use typing message for first delivery
+        typingPostId = undefined;
       },
       onError: (err, info) => {
         logger.error(
