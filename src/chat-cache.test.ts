@@ -65,9 +65,12 @@ describe("fetchAllChats", () => {
     // but definitely less than sequential execution time.
     expect(duration).toBeLessThan(DELAY * 4);
 
+    // Verify ownerId resolved
+    expect(result.ownerId).toBe("self-id");
+
     // Verify result content
-    expect(result).toHaveLength(5);
-    expect(result.map(c => c.id).sort()).toEqual([
+    expect(result.chats).toHaveLength(5);
+    expect(result.chats.map(c => c.id).sort()).toEqual([
       "chat-Direct",
       "chat-Everyone",
       "chat-Group",
@@ -90,7 +93,7 @@ describe("fetchAllChats", () => {
 
     expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining("Failed to fetch Direct chats"));
     // Should have 4 results (missing Direct)
-    expect(result).toHaveLength(4);
-    expect(result.find(c => c.id === "chat-Direct")).toBeUndefined();
+    expect(result.chats).toHaveLength(4);
+    expect(result.chats.find(c => c.id === "chat-Direct")).toBeUndefined();
   });
 });

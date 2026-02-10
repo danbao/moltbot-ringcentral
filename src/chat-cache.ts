@@ -150,7 +150,7 @@ function sleep(ms: number): Promise<void> {
 export async function fetchAllChats(
   account: ResolvedRingCentralAccount,
   logger: ChatCacheLogger,
-): Promise<CachedChat[]> {
+): Promise<{ chats: CachedChat[]; ownerId: string | undefined }> {
   const ownerIdPromise = resolveOwnerId(account, logger);
 
   const chatPromises = CHAT_TYPES.map(async (chatType) => {
@@ -221,7 +221,7 @@ export async function fetchAllChats(
     }
   }
 
-  return result;
+  return { chats: result, ownerId };
 }
 
 async function syncOnce(
@@ -231,13 +231,11 @@ async function syncOnce(
 ): Promise<void> {
   logger.debug(`[chat-cache] Syncing chats for account ${account.accountId}...`);
   try {
-    // Resolve and cache ownerId for precise Direct chat matching
-    const ownerId = await resolveOwnerId(account, logger);
+    const { chats, ownerId } = await fetchAllChats(account, logger);
     if (ownerId) {
       cachedOwnerId = ownerId;
     }
 
-    const chats = await fetchAllChats(account, logger);
     const changed = cacheChanged(memoryCache, chats);
     memoryCache = chats;
 
