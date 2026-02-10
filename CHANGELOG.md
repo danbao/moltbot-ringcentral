@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2026.2.9-1] - 2026-02-10
+
+### Added
+
+- **Structural Loop Guard Filter** - High-confidence, name-independent pattern matching to prevent bot self-reply loops
+  - `thinking_marker`: Filters `> Xxx is thinking...` with any bot name, optional emoji, and Chinese variant (`正在思考`)
+  - `answer_wrapper`: Filters `> ---answer---` / `> ---end---` with variable dash count
+  - `queued_busy`: Filters `Queued messages while agent was busy` (case-insensitive)
+  - `queued_number`: Filters `Queued #N` pattern
+  - Explicitly does **not** filter `media:attachment`, `System:` prefix, or `RingCentral user:` prefix
+- **Attachment Placeholder Silent Discard** - Messages containing only `media:attachment` or `<media:attachment>` are silently dropped; messages with placeholder + real text pass through normally
+
+### Fixed
+
+- **Publish Note False Failure** - `publishRingCentralNote()` no longer throws `Unexpected end of JSON input` on empty 2xx responses; returns `{status: "Active"}` on success instead of misreporting `status: partial, noteStatus: Draft`
+
 ## [2026.2.9] - 2026-02-10
 
 ### Added
