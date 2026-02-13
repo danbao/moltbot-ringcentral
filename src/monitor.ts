@@ -797,6 +797,7 @@ async function processMessageWithPipeline(params: {
     SenderId: senderId,
     WasMentioned: isGroup ? effectiveWasMentioned : undefined,
     CommandAuthorized: commandAuthorized,
+    CommandSource: "text" as const,
     Provider: "ringcentral",
     Surface: "ringcentral",
     MessageSid: eventBody.id,
@@ -892,30 +893,47 @@ async function processMessageWithPipeline(params: {
     logger.debug(`[${account.accountId}] Failed to send thinking indicator: ${String(err)}`);
   }
 
-  await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
-    ctx: ctxPayload,
-    cfg: config,
-    dispatcherOptions: {
-      deliver: async (payload) => {
-        await deliverRingCentralReply({
-          payload,
-          account,
-          chatId,
-          core,
-          config,
-          statusSink,
-          typingPostId,
-        });
-        // Only use typing message for first delivery
-        typingPostId = undefined;
+  const isControlCommand = core.channel.commands.isControlCommandMessage(rawBody, config);
+  logger.debug(
+    `[${account.accountId}] Dispatching: isCommand=${isControlCommand} authorized=${commandAuthorized} sessionKey=${route.sessionKey}`,
+  );
+
+  try {
+    await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
+      ctx: ctxPayload,
+      cfg: config,
+      dispatcherOptions: {
+        deliver: async (payload) => {
+          await deliverRingCentralReply({
+            payload,
+            account,
+            chatId,
+            core,
+            config,
+            statusSink,
+            typingPostId,
+          });
+          // Only use typing message for first delivery
+          typingPostId = undefined;
+        },
+        onError: (err, info) => {
+          logger.error(
+            `[${account.accountId}] RingCentral ${info.kind} reply failed: ${String(err)}`,
+          );
+        },
       },
-      onError: (err, info) => {
-        logger.error(
-          `[${account.accountId}] RingCentral ${info.kind} reply failed: ${String(err)}`,
-        );
-      },
-    },
-  });
+    });
+  } catch (err) {
+    logger.error(`[${account.accountId}] Command/reply dispatch failed: ${String(err)}`);
+    // Clean up thinking indicator if still present
+    if (typingPostId) {
+      try { await deleteRingCentralMessage({ account, chatId, postId: typingPostId }); } catch { /* ignore */ }
+    }
+    // Send visible error fallback to prevent silent failure
+    try {
+      await sendRingCentralMessage({ account, chatId, text: "⚠️ An error occurred while processing your message." });
+    } catch { /* silent */ }
+  }
 }
 
 async function downloadAttachment(
