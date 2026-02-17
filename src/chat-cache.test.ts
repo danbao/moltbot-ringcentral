@@ -96,4 +96,51 @@ describe("fetchAllChats", () => {
     expect(result.chats).toHaveLength(4);
     expect(result.chats.find(c => c.id === "chat-Direct")).toBeUndefined();
   });
+
+  it("should resolve direct chat names in batches", async () => {
+    const NUM_CHATS = 6; // 6 chats => 2 batches of 3
+    const RESOLVE_DELAY = 50; // Delay for each resolution
+    // const BATCH_DELAY = 200; // Expected delay between batches
+
+    vi.mocked(api.getCurrentRingCentralUser).mockResolvedValue({ id: "self-id" } as any);
+
+    // Mock listRingCentralChats to return many Direct chats with no name
+    vi.mocked(api.listRingCentralChats).mockImplementation(async ({ type }) => {
+      if (type && type[0] === "Direct") {
+        return Array.from({ length: NUM_CHATS }, (_, i) => ({
+          id: `chat-direct-${i}`,
+          type: "Direct",
+          members: [{ id: "self-id" }, { id: `user-${i}` }],
+        })) as any[];
+      }
+      return [];
+    });
+
+    // Mock getRingCentralUser with a delay
+    vi.mocked(api.getRingCentralUser).mockImplementation(async ({ userId }) => {
+      await new Promise((resolve) => setTimeout(resolve, RESOLVE_DELAY));
+      return { id: userId, firstName: `User`, lastName: userId } as any;
+    });
+
+    const start = Date.now();
+    await fetchAllChats(mockAccount, mockLogger);
+    const end = Date.now();
+    const duration = end - start;
+
+    // Sequential execution (current):
+    // (NUM_CHATS - 1) * 500ms sleep + NUM_CHATS * 50ms resolve
+    // = 5 * 500 + 6 * 50 = 2500 + 300 = 2800ms
+    //
+    // Batched execution (optimized):
+    // 2 batches of 3.
+    // Batch 1: 50ms resolve
+    // Sleep: 200ms (between batches)
+    // Batch 2: 50ms resolve
+    // Total: ~300ms
+
+    // We assert that it is significantly faster than the sequential baseline.
+    // 1000ms is a safe upper bound for the optimized version (300ms expected).
+    expect(duration).toBeLessThan(1000);
+    expect(api.getRingCentralUser).toHaveBeenCalledTimes(NUM_CHATS);
+  });
 });
