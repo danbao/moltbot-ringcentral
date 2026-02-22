@@ -228,6 +228,45 @@ export function sanitizeFilename(name: string): string {
   return name.replace(/[^a-zA-Z0-9-_]/g, "_");
 }
 
+export function redactSensitive(obj: any, seen = new WeakSet()): any {
+  if (obj === null || typeof obj !== "object") {
+    return obj;
+  }
+  if (seen.has(obj)) {
+    return "[Circular]";
+  }
+  seen.add(obj);
+
+  if (Array.isArray(obj)) {
+    return obj.map((item) => redactSensitive(item, seen));
+  }
+
+  const redacted: any = {};
+  for (const key of Object.keys(obj)) {
+    const lowerKey = key.toLowerCase();
+    if (
+      [
+        "text",
+        "name",
+        "description",
+        "contenturi",
+        "email",
+        "jwt",
+        "clientsecret",
+        "firstname",
+        "lastname",
+        "access_token",
+        "refreshtoken",
+      ].includes(lowerKey)
+    ) {
+      redacted[key] = "[REDACTED]";
+    } else {
+      redacted[key] = redactSensitive(obj[key], seen);
+    }
+  }
+  return redacted;
+}
+
 /**
  * Save group chat message to workspace memory file.
  * File path: ${workspace}/memory/chats/YYYY-MM-DD/${chatId}.md
@@ -461,9 +500,7 @@ async function processMessageWithPipeline(params: {
 
     // OpenClaw logger respects configured log level - debug output controlled by openclaw config
     logger.debug(
-      `[${account.accountId}] chatInfo: id=${chatId} type=${chatInfo?.type ?? null} ` +
-      `name=${JSON.stringify(chatInfo?.name ?? null)} members=${JSON.stringify(chatInfo?.members ?? null)} ` +
-      `description=${JSON.stringify(chatInfo?.description ?? null)}`,
+      `[${account.accountId}] chatInfo: ${JSON.stringify(redactSensitive(chatInfo))}`,
     );
   } catch (err) {
     // If we can't fetch chat info, assume it's a group.
@@ -1183,7 +1220,7 @@ export async function startRingCentralMonitor(
 
       // Handle notifications
       subscription.on(subscription.events.notification, (event: unknown) => {
-        logger.debug(`WebSocket notification received: ${JSON.stringify(event)}`);
+        logger.debug(`WebSocket notification received: ${JSON.stringify(redactSensitive(event))}`);
         lastInboundAt = Date.now();
         const evt = event as RingCentralWebhookEvent;
         processWebSocketEvent({
